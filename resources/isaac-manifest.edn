@@ -49,6 +49,13 @@
  {"google.workspace.chat.message.v1.created" isaac.comm.gchat.handler/handle-event
   "google.workspace.chat.message.v1.updated" isaac.comm.gchat.handler/handle-event}
 
+ :isaac.google/registration
+ {:chat {:create! isaac.comm.gchat.registration/create!
+         :renew!  isaac.comm.gchat.registration/renew!
+         :expiry  isaac.comm.gchat.registration/expiry
+         :key     isaac.comm.gchat.registration/space-keys}}
+
  :isaac.google/scopes
- ["https://www.googleapis.com/auth/chat.messages"]
-}
+ ["https://www.googleapis.com/auth/chat.messages"
+  "https://www.googleapis.com/auth/chat.spaces.readonly"]
+ }

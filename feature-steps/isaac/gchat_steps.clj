@@ -89,12 +89,16 @@
   {:isaac.comm.gchat {:local/root (System/getProperty "user.dir")}})
 
 (defn- gchat-module-index []
-  (when-let [manifest (some-> (io/resource "isaac-manifest.edn") slurp edn/read-string)]
-    {:isaac.comm.gchat {:coord    {:local/root (System/getProperty "user.dir")}
-                        :manifest manifest
-                        :path     nil}}))
+  (let [local (io/file (System/getProperty "user.dir") "resources" "isaac-manifest.edn")
+        manifest (cond
+                   (.exists local) (edn/read-string (slurp local))
+                   :else (some-> (io/resource "isaac-manifest.edn") slurp edn/read-string))]
+    (when manifest
+      {:isaac.comm.gchat {:coord    {:local/root (System/getProperty "user.dir")}
+                          :manifest manifest
+                          :path     nil}})))
 
-(defn- inject-gchat-module! []
+(defn inject-gchat-module! []
   (alter-var-root #'discovery/*foundation-index-override*
                   (fn [prev]
                     (merge (or prev (discovery/builtin-index))
@@ -166,15 +170,15 @@
   (or (get (g/get :gchat-api-messages) name)
       (throw (ex-info (str "no Chat API stub for " name) {:name name}))))
 
-(defn google-auth-store-has-access [at rt]
-  (with-feature-fs
-    (fn []
-      (auth-store/save-tokens! (or (root-dir) "target/test-state") "google"
-                               {:access_token  at
-                                :refresh_token rt
-                                :expires_in    3600}
-                               (feature-fs))))
-  (g/assoc! :gchat-access-token at))
+(defn- gchat-access-token []
+  (or (g/get :gchat-access-token)
+      (when-let [tokens (with-feature-fs
+                          (fn []
+                            (auth-store/load-tokens (or (root-dir) "target/test-state")
+                                                    "google"
+                                                    (feature-fs))))]
+        (or (:access tokens) (:access_token tokens)))
+      "at-1"))
 
 (defn gchat-outbound-comm-registered []
   (ensure-gchat-factory!)
@@ -196,7 +200,8 @@
   (g/update! :gchat-http-stub (fnil assoc {}) :setup-space name))
 
 (defn- with-chat-stubs [f]
-  (let [token (or (g/get :gchat-access-token) "at-1")]
+  (let [token (gchat-access-token)]
+    (g/assoc! :gchat-access-token token)
     (with-redefs [chat-api/get-message! stub-get-message!
                   chat-api/-http!       stub-http!
                   gchat/access-token    (constantly token)]
@@ -242,9 +247,6 @@
 
 (defgiven #"the Chat API returns message \"([^\"]+)\":"
   isaac.gchat-steps/chat-api-returns)
-
-(defgiven "the google auth store has access {at:string} and refresh {rt:string}"
-  isaac.gchat-steps/google-auth-store-has-access)
 
 (defgiven "gchat outbound comm is registered"
   isaac.gchat-steps/gchat-outbound-comm-registered)

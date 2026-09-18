@@ -1,4 +1,3 @@
-@wip
 Feature: Google Chat registrations and renewal
   One Workspace Events subscription per configured space, pointer-only,
   against the shared topic. A timer component creates what is missing,
@@ -71,9 +70,9 @@ Feature: Google Chat registrations and renewal
     And the Workspace Events API grants subscriptions expiring at "2026-09-25T12:00:00Z"
     When the google registration timer ticks
     Then the log has entries matching:
-      | level  | event                       | key        | reason                                   |
-      | :error | :google/registration-failed | spaces/ENG | #".*does not have permission.*"          |
-      | :info  | :google/registered          | spaces/PROD | 2026-09-25T12:00:00Z                    |
+      | level  | event                       | key         | reason                          | expires-at           |
+      | :error | :google/registration-failed | spaces/ENG  | #".*does not have permission.*" |                      |
+      | :info  | :google/registered          | spaces/PROD |                                 | 2026-09-25T12:00:00Z |
     When the test clock advances 3600000 milliseconds
     And the google registration timer ticks
     Then 2 outbound HTTP requests to "https://workspaceevents.googleapis.com/v1/subscriptions" for "spaces/ENG" were made
