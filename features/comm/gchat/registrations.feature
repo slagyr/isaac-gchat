@@ -57,7 +57,7 @@ Feature: Google Chat registrations and renewal
     Given the Workspace Events API has subscription "subscriptions/s-eng" for "spaces/ENG" expiring at "2026-09-24T12:00:00Z"
     And the Workspace Events API has subscription "subscriptions/s-prod" for "spaces/PROD" expiring at "2026-09-24T12:00:00Z"
     And config:
-      | comms.gchat.gchat/spaces.spaces/PROD | #remove |
+      | comms.gchat.gchat/spaces.spaces/PROD | #delete |
     When the google registration timer ticks
     Then an outbound HTTP request to "https://workspaceevents.googleapis.com/v1/subscriptions/s-prod" matches:
       | method | DELETE |
