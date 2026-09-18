@@ -1,4 +1,3 @@
-@wip
 Feature: Google Chat inbound gate
   A Workspace Events pointer arrives for a space the Google user belongs
   to. The gate is deterministic and runs before any turn: drop Isaac's own

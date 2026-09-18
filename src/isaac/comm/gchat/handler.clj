@@ -1,0 +1,88 @@
+(ns isaac.comm.gchat.handler
+  "Pub/Sub Chat pointer → fetch → gate → dispatch."
+  (:require
+    [isaac.api :as api]
+    [isaac.comm.gchat.chat-api :as chat-api]
+    [isaac.comm.gchat.gate :as gate]
+    [isaac.config.loader :as loader]
+    [isaac.config.root :as root]
+    [isaac.fs :as fs]
+    [isaac.logger :as log]
+    [isaac.nexus :as nexus]))
+
+(defn- feature-fs []
+  (or (fs/instance) (nexus/get :fs) (fs/real-fs)))
+
+(defn- gchat-slice [cfg]
+  (or (get-in cfg [:comms :gchat])
+      (get-in cfg [:comms "gchat"])))
+
+(defn -load-cfg []
+  (let [root (or (nexus/get :root) (root/current-root))
+        snap (loader/snapshot "gchat")
+        cfg  (if (:gchat/account (gchat-slice snap))
+               snap
+               (or (:config (loader/load-config-result {:root root :fs (feature-fs)}))
+                   snap
+                   {}))]
+    (or (gchat-slice cfg) {})))
+
+(defn- message-name [event]
+  (or (get-in event [:data :message :name])
+      (get-in event [:data :messageName])
+      (get-in event [:data "message" "name"])))
+
+(defn- origin [decision]
+  {:kind   :gchat
+   :space  (:space decision)
+   :thread (:thread decision)})
+
+(defn- ensure-session! [decision]
+  (or (api/get-session (:session-key decision))
+      (api/create-session! (:session-key decision)
+                           {:channel  "gchat"
+                            :chatType (if (:dm? decision) "direct" "space")
+                            :crew     (:crew decision)
+                            :origin   (origin decision)})))
+
+(defn- full-config []
+  (try
+    (let [root (or (nexus/get :root) (root/current-root))
+          snap (loader/snapshot "gchat")
+          cfg  (if (seq (:models snap))
+                 snap
+                 (or (when root
+                       (:config (loader/load-config-result {:root root :fs (feature-fs)})))
+                     snap
+                     {}))]
+      cfg)
+    (catch Exception _
+      {})))
+
+(defn- dispatch! [decision]
+  (ensure-session! decision)
+  (api/dispatch! {:session-key (:session-key decision)
+                  :input       (str (:sender decision) " " (:text decision))
+                  :origin      (origin decision)
+                  :crew        (:crew decision)
+                  :config      (full-config)}))
+
+(defn handle-event
+  "Contributed :isaac.google/handler for google.workspace.chat.message.v1.*."
+  [event]
+  (let [name (message-name event)]
+    (if-not name
+      (log/error :gchat/fetch-failed :error "missing message name")
+      (try
+        (let [message  (chat-api/get-message! name)
+              decision (gate/decide (-load-cfg) message)]
+          (if (= :drop (:action decision))
+            (log/debug :gchat/message-dropped :reason (:reason decision))
+            (do
+              (dispatch! decision)
+              (log/info :gchat/message-routed
+                        :space (:space decision)
+                        :thread (:thread decision)
+                        :session (:session-key decision)))))
+        (catch Exception e
+          (log/error :gchat/fetch-failed :message name :error (.getMessage e)))))))

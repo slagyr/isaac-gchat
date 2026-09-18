@@ -1,5 +1,46 @@
-{:id       :isaac.comm.gchat
- :version  "0.1.0"
- :builtin? true
- :factory  isaac.comm.gchat.module/create-module
- :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."}
+{:id          :isaac.comm.gchat
+ :version     "0.1.1"
+ :builtin?    true
+ :factory     isaac.comm.gchat.module/create-module
+ :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
+
+ :isaac.http/comm
+ {:gchat {:namespace    isaac.comm.gchat
+          :extra-schema {:gchat/account    {:type        :string
+                                            :description "Google account email of the Isaac user (echo drop)."}
+                         :gchat/allow-from {:type        :seq
+                                            :spec        {:type :string}
+                                            :description "Inbound allowlist of sender emails. Missing or empty = fail-closed."}
+                         :gchat/spaces     {:type        :map
+                                            :key-spec    {:type :keyword}
+                                            :value-spec  {:type   :map
+                                                          :schema {:name         {:type :string
+                                                                                  :description "Friendly display name."}
+                                                                   :session      {:type :string
+                                                                                  :description "Explicit session id for this space"}
+                                                                   :session-tags {:type :seq
+                                                                                  :spec {:type :keyword}
+                                                                                  :description "Tags the target session must carry (AND)"}
+                                                                   :crew         {:type :string
+                                                                                  :description "Crew for session selection or creation."}
+                                                                   :reach        {:type :keyword
+                                                                                  :validations [[:one-of? :one :all]]
+                                                                                  :description "How many sessions to target"}
+                                                                   :prefer       {:type :keyword
+                                                                                  :validations [[:one-of? :recent :oldest]]
+                                                                                  :description "Multi-match tiebreak when :reach is :one"}
+                                                                   :create       {:type :keyword
+                                                                                  :validations [[:one-of? :never :if-missing :always]]
+                                                                                  :description "Create policy"}
+                                                                   :respond      {:type        :keyword
+                                                                                  :validations [[:one-of? :mentions :all :never]]
+                                                                                  :description "When to start a turn: mentions (default), all, or never."}}}
+                                            :description "Configured Chat spaces. Unlisted spaces fail closed."}}}}
+
+ :isaac.google/handler
+ {"google.workspace.chat.message.v1.created" isaac.comm.gchat.handler/handle-event
+  "google.workspace.chat.message.v1.updated" isaac.comm.gchat.handler/handle-event}
+
+ :isaac.google/scopes
+ ["https://www.googleapis.com/auth/chat.messages.readonly"]
+}
