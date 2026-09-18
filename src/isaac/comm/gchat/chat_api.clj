@@ -1,11 +1,14 @@
 (ns isaac.comm.gchat.chat-api
-  "Chat API client. Feature steps redef get-message! — production hits
-   spaces.messages.get as the Google user."
+  "Chat API client. Feature steps redef get-message! / -http! — production
+   hits Chat as the Google user."
   (:require
-    [cheshire.core :as json])
+    [babashka.http-client :as http]
+    [cheshire.core :as json]
+    [clojure.string :as str])
   (:import
-    (java.net URI)
-    (java.net.http HttpClient HttpRequest HttpResponse$BodyHandlers)))
+    (java.net URLEncoder)))
+
+(def ^:private chat-base "https://chat.googleapis.com/v1")
 
 (defn- parse-body [body]
   (try
@@ -13,21 +16,92 @@
     (catch Exception _
       body)))
 
+(defn- encode [s]
+  (URLEncoder/encode (str s) "UTF-8"))
+
+(defn- with-query [url query]
+  (if (seq query)
+    (str url "?"
+         (str/join "&" (map (fn [[k v]]
+                              (str (name k) "=" (encode v)))
+                            query)))
+    url))
+
+(defonce ^:private last-request* (atom nil))
+
+(defn last-request []
+  @last-request*)
+
+(defn -http!
+  "Internal HTTP seam. Returns {:status n :body parsed}."
+  [{:keys [method url headers query body] :as req}]
+  (reset! last-request* req)
+  (let [full-url (with-query url query)
+        payload  (when body (json/generate-string body))
+        opts     (cond-> {:headers (or headers {}) :throw false}
+                   payload (assoc :body payload))
+        response (case (keyword method)
+                   :get  (http/get full-url opts)
+                   :post (http/post full-url opts)
+                   (http/request (assoc opts :method (keyword method) :uri full-url)))
+        status   (:status response 0)
+        parsed   (parse-body (:body response))]
+    {:status status :body parsed}))
+
 (defn get-message!
   "GET spaces.messages.get. Throws on non-2xx so the handler can fail the record."
   [name]
-  (let [token   ((requiring-resolve 'isaac.google.token/token))
-        url     (str "https://chat.googleapis.com/v1/" name)
-        client  (HttpClient/newHttpClient)
-        request (-> (HttpRequest/newBuilder)
-                    (.uri (URI/create url))
-                    (.header "Authorization" (str "Bearer " token))
-                    (.GET)
-                    (.build))
-        resp    (.send client request (HttpResponse$BodyHandlers/ofString))
-        status  (.statusCode resp)
-        body    (parse-body (.body resp))]
-    (if (<= 200 status 299)
-      body
-      (throw (ex-info (str "Chat API get failed: " status)
-                      {:status status :body body :name name})))))
+  (let [token ((requiring-resolve 'isaac.google.token/token))
+        resp  (-http! {:method  "GET"
+                       :url     (str chat-base "/" name)
+                       :headers {"Authorization" (str "Bearer " token)}})]
+    (if (<= 200 (:status resp) 299)
+      (:body resp)
+      (throw (ex-info (str "Chat API get failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :name name})))))
+
+(defn create-message!
+  "POST spaces.messages.create. When :thread is set, reply in that thread."
+  [{:keys [space thread text token]}]
+  (let [query (when (seq thread)
+                {:messageReplyOption "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD"})
+        body  (cond-> {:text text}
+                (seq thread) (assoc :thread {:name thread}))
+        resp  (-http! {:method  "POST"
+                       :url     (str chat-base "/" space "/messages")
+                       :headers {"Authorization" (str "Bearer " token)
+                                 "Content-Type"  "application/json"}
+                       :query   query
+                       :body    body})]
+    (if (<= 200 (:status resp) 299)
+      (:body resp)
+      (throw (ex-info (str "Chat API create failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :space space})))))
+
+(defn find-direct-message!
+  "GET spaces:findDirectMessage?name=users/<email>. Nil on 404."
+  [email token]
+  (let [resp (-http! {:method  "GET"
+                      :url     (str chat-base "/spaces:findDirectMessage")
+                      :headers {"Authorization" (str "Bearer " token)}
+                      :query   {:name (str "users/" email)}})]
+    (cond
+      (<= 200 (:status resp) 299) (:body resp)
+      (= 404 (:status resp))      nil
+      :else
+      (throw (ex-info (str "Chat API findDirectMessage failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :email email})))))
+
+(defn setup-direct-message!
+  "POST spaces:setup DIRECT_MESSAGE with that member."
+  [email token]
+  (let [resp (-http! {:method  "POST"
+                      :url     (str chat-base "/spaces:setup")
+                      :headers {"Authorization" (str "Bearer " token)
+                                "Content-Type"  "application/json"}
+                      :body    {:space        {:spaceType "DIRECT_MESSAGE"}
+                                :memberships  [{:member {:name (str "users/" email)}}]}})]
+    (if (<= 200 (:status resp) 299)
+      (:body resp)
+      (throw (ex-info (str "Chat API spaces:setup failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :email email})))))

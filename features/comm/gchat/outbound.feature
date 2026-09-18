@@ -1,4 +1,3 @@
-@wip
 Feature: Google Chat outbound
   A turn that came from Chat replies in the thread it came from. Unprompted
   sends target a space by name, or a person by email, resolving or creating

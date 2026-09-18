@@ -2,8 +2,10 @@
   "Pub/Sub Chat pointer → fetch → gate → dispatch."
   (:require
     [isaac.api :as api]
+    [isaac.comm.factory :as comm-factory]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.gate :as gate]
+    [isaac.comm.registry :as comm-registry]
     [isaac.config.loader :as loader]
     [isaac.config.root :as root]
     [isaac.fs :as fs]
@@ -59,13 +61,21 @@
     (catch Exception _
       {})))
 
+(defn- live-comm [cfg]
+  (or (comm-registry/comm-for "gchat")
+      (try
+        (comm-factory/create [:comms :gchat] cfg)
+        (catch Exception _ nil))))
+
 (defn- dispatch! [decision]
   (ensure-session! decision)
-  (api/dispatch! {:session-key (:session-key decision)
-                  :input       (str (:sender decision) " " (:text decision))
-                  :origin      (origin decision)
-                  :crew        (:crew decision)
-                  :config      (full-config)}))
+  (let [ch (live-comm (-load-cfg))]
+    (api/dispatch! (cond-> {:session-key (:session-key decision)
+                            :input       (str (:sender decision) " " (:text decision))
+                            :origin      (origin decision)
+                            :crew        (:crew decision)
+                            :config      (full-config)}
+                     ch (assoc :comm ch)))))
 
 (defn handle-event
   "Contributed :isaac.google/handler for google.workspace.chat.message.v1.*."
