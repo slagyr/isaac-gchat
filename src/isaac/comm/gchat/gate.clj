@@ -75,9 +75,36 @@
 (defn- policy-kw [policy]
   (keyword (or policy :mentions)))
 
-(defn- allowed-sender? [cfg email]
-  (let [allow (allow-from cfg)]
-    (boolean (and (seq allow) (some #(= email %) allow)))))
+(defn- sender-user [message]
+  (get-in message [:sender :name]))
+
+(defn- sender-domain [message]
+  (get-in message [:sender :domainId]))
+
+(defn sender-identity
+  "What the gate knows about who sent this: email when Google supplies it,
+   the users/<id> resource, and the Workspace domainId. spaces.messages.get
+   under user auth returns users/<id> + domainId and NO email for human
+   senders, so an allow-list must be able to name those."
+  [message]
+  {:email  (sender-email message)
+   :user   (sender-user message)
+   :domain (sender-domain message)})
+
+(defn- allowed-sender?
+  "An allow-from entry matches by email, by users/<id>, or by domain:<domainId>
+   (the Workspace customer id, as Chat reports it in sender.domainId)."
+  [cfg message]
+  (let [allow (allow-from cfg)
+        {:keys [email user domain]} (sender-identity message)]
+    (boolean
+      (and (seq allow)
+           (some (fn [entry]
+                   (let [entry (str entry)]
+                     (or (and (seq email) (= entry email))
+                         (and (seq user) (= entry user))
+                         (and (seq domain) (= entry (str "domain:" domain))))))
+                 allow)))))
 
 (defn decide
   "Pure: cfg + fetched Chat message → {:action :route ...} | {:action :drop :reason kw}."
@@ -90,8 +117,8 @@
       (and (seq account) (= email account))
       {:action :drop :reason :self}
 
-      (not (allowed-sender? cfg email))
-      {:action :drop :reason :sender}
+      (not (allowed-sender? cfg message))
+      {:action :drop :reason :sender :sender (sender-identity message)}
 
       (and (not (dm? message)) (nil? (space-cfg cfg space)))
       {:action :drop :reason :space}
@@ -117,4 +144,4 @@
            :space-cfg   (space-cfg cfg space)
            :dm?         (dm? message)
            :text        (or (:text message) "")
-           :sender      email})))))
+           :sender      (or email (sender-user message))})))))

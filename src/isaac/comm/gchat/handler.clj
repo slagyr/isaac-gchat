@@ -87,7 +87,10 @@
         (let [message  (chat-api/get-message! name)
               decision (gate/decide (-load-cfg) message)]
           (if (= :drop (:action decision))
-            (log/debug :gchat/message-dropped :reason (:reason decision))
+            (if (= :sender (:reason decision))
+              ;; the one drop an operator must see: it names the identity to allow
+              (log/info :gchat/message-dropped :reason :sender :sender (:sender decision) :message name)
+              (log/debug :gchat/message-dropped :reason (:reason decision)))
             (do
               (dispatch! decision)
               (log/info :gchat/message-routed

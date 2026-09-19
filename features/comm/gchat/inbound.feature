@@ -82,7 +82,8 @@ Feature: Google Chat inbound gate
       | text                | @Isaac hi                |
       | annotations.mention | users/yopp               |
     And the Chat API returns message "spaces/ENG/messages/4":
-      | sender.email        | mallory@example.com   |
+      | sender.name         | users/999             |
+      | sender.domainId     | 0xother               |
       | thread.name         | spaces/ENG/threads/T1 |
       | text                | @Isaac hi             |
       | annotations.mention | users/yopp            |
@@ -91,9 +92,25 @@ Feature: Google Chat inbound gate
     Then the session count is 0
     And grover records zero provider requests
     And the log has entries matching:
-      | level  | event                  | reason  |
-      | :debug | :gchat/message-dropped | :space  |
-      | :debug | :gchat/message-dropped | :sender |
+      | level  | event                  | reason  | sender.user | sender.domain |
+      | :debug | :gchat/message-dropped | :space  |             |               |
+      | :info  | :gchat/message-dropped | :sender | users/999   | 0xother       |
+
+  Scenario: a human sender is admitted by users/<id> or domain:<id> — Chat does not return emails for people
+    Given config:
+      | comms.gchat.gchat/allow-from | ["users/118285940969606191299"] |
+    And the Chat API returns message "spaces/ENG/messages/5":
+      | sender.name         | users/118285940969606191299 |
+      | sender.displayName  | Micah Martin                |
+      | sender.domainId     | 0ivzlyj                     |
+      | thread.name         | spaces/ENG/threads/T5       |
+      | text                | @Isaac hi                   |
+      | annotations.mention | users/yopp                  |
+    When Google Chat delivers a message event for "spaces/ENG/messages/5"
+    Then the session count is 1
+    And the log has entries matching:
+      | level | event                 |
+      | :info | :gchat/message-routed |
 
   Scenario: a space with respond policy all answers without a mention
     Given config:

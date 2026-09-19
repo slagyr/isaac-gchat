@@ -56,6 +56,23 @@
       (should= :drop (:action result))
       (should= :space (:reason result))))
 
+  (it "admits a human sender Google reports as users/<id> with no email, when the allow-list names the id"
+    (let [human (-> (message) (assoc :sender {:name "users/118285940969606191299" :displayName "Micah Martin" :type "HUMAN" :domainId "0ivzlyj"}))
+          cfg'  (assoc cfg :gchat/allow-from ["users/118285940969606191299"])]
+      (should= :route (:action (sut/decide cfg' human)))
+      (should= "users/118285940969606191299" (:sender (sut/decide cfg' human)))))
+
+  (it "admits any sender in the Workspace when the allow-list names domain:<domainId>"
+    (let [human (-> (message) (assoc :sender {:name "users/42" :type "HUMAN" :domainId "0ivzlyj"}))]
+      (should= :route (:action (sut/decide (assoc cfg :gchat/allow-from ["domain:0ivzlyj"]) human)))
+      (should= :drop (:action (sut/decide (assoc cfg :gchat/allow-from ["domain:other"]) human)))))
+
+  (it "names the sender it dropped so the operator can allow it"
+    (let [human (-> (message) (assoc :sender {:name "users/42" :type "HUMAN" :domainId "0ivzlyj"}))
+          d     (sut/decide cfg human)]
+      (should= :sender (:reason d))
+      (should= {:email nil :user "users/42" :domain "0ivzlyj"} (:sender d))))
+
   (it "drops an unknown sender"
     (let [result (sut/decide cfg (message :email "mallory@example.com"))]
       (should= :drop (:action result))
