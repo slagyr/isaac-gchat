@@ -13,7 +13,9 @@
     [isaac.fs :as fs]
     [isaac.google.people :as people]
     [isaac.logger :as log]
-    [isaac.nexus :as nexus]))
+    [isaac.nexus :as nexus]
+    [isaac.session.frequencies :as frequencies]
+    [isaac.session.store.spi :as session-store]))
 
 (defn- feature-fs []
   (or (fs/instance) (nexus/get :fs) (fs/real-fs)))
@@ -50,13 +52,72 @@
       (seq (str (or display-name ""))) (assoc :display-name display-name)
       (seq (str (or email "")))        (assoc :email email))))
 
-(defn- ensure-session! [decision]
-  (or (api/get-session (:session-key decision))
-      (api/create-session! (:session-key decision)
+(defn- ensure-session! [decision session-key]
+  (or (api/get-session session-key)
+      (api/create-session! session-key
                            {:channel  "gchat"
                             :chatType (if (:dm? decision) "direct" "space")
                             :crew     (:crew decision)
                             :origin   (origin decision)})))
+
+(def FREQUENCY-KEYS
+  "What a space entry may say about which session hears it — the agent's
+   vocabulary, the same one hail speaks (isaac-tund)."
+  [:session :session-tags :crew :reach :prefer :create])
+
+(defn space->frequencies
+  "A space entry's selection fields as session frequencies. An entry that
+   names neither tags nor a session keeps the canonical per-space id."
+  [space-cfg default-key]
+  (let [entry (select-keys (or space-cfg {}) FREQUENCY-KEYS)
+        base  {:create :if-missing :reach :one :prefer :recent}]
+    (cond
+      (seq (:session-tags entry))
+      (merge base entry)
+
+      (:session entry)
+      (merge base (dissoc entry :session) {:session [(:session entry)]})
+
+      :else
+      (merge base (dissoc entry :session) {:default-session-key default-key}))))
+
+(defn- session-keys
+  "Which sessions this message goes to. :reach :all fans out over every
+   session the entry's tags and crew match; :one resolves a single target the
+   way hail does, creating it when the entry allows."
+  [decision]
+  (let [store (try (session-store/registered-store) (catch Exception _ nil))
+        freq  (space->frequencies (:space-cfg decision) (:session-key decision))
+]
+    (cond
+      ;; No store to select against — the canonical per-space session is the
+      ;; answer, and routing never waits on selection.
+      (nil? store)
+      [(:session-key decision)]
+
+      (= :all (:reach freq))
+      (let [matches (frequencies/matching-sessions freq (session-store/list-sessions store))
+            keys*   (vec (keep :name matches))]
+        (if (seq keys*)
+          keys*
+          [(:session-key decision)]))
+
+      :else
+      (let [target (frequencies/resolve-session-targets freq store)]
+        (cond
+          (:error target)
+          (do (log/warn :gchat.route/no-session
+                        :space (:space decision)
+                        :message (:message target))
+              [])
+
+          (:create? target)
+          [(let [key* (or (:session-key target) (:session-key decision))]
+             (ensure-session! decision key*)
+             key*)]
+
+          :else
+          [(:session-key target)])))))
 
 (defn- full-config []
   (try
@@ -106,23 +167,30 @@
                         (map context-line history)
                         ["" CONTEXT-END "" current])))))
 
+(defn- dispatch-to! [decision session-key input ch]
+  (api/dispatch! (cond-> {:session-key session-key
+                          :input       input
+                          :origin      (origin decision)
+                          :crew        (:crew decision)
+                          :config      (full-config)}
+                   ch (assoc :comm ch))))
+
 (defn- dispatch! [decision]
-  (ensure-session! decision)
   (let [ch    (live-comm (-load-cfg))
-        input (framed-input decision)]
+        input (framed-input decision)
+        keys* (session-keys decision)]
     (transcript/append! (:space decision) (transcript/entry decision))
-    (api/dispatch! (cond-> {:session-key (:session-key decision)
-                            :input       input
-                            :origin      (origin decision)
-                            :crew        (:crew decision)
-                            :config      (full-config)}
-                     ch (assoc :comm ch)))
+    (doseq [session-key keys*]
+      (ensure-session! decision session-key)
+      (dispatch-to! decision session-key input ch))
     ;; Isaac answered here: the next mention's context starts after this line.
-    (transcript/append! (:space decision)
-                        (transcript/entry {:sender (:gchat/account (-load-cfg))
-                                           :text   ""
-                                           :thread (:thread decision)
-                                           :self?  true}))))
+    (when (seq keys*)
+      (transcript/append! (:space decision)
+                          (transcript/entry {:sender (:gchat/account (-load-cfg))
+                                             :text   ""
+                                             :thread (:thread decision)
+                                             :self?  true})))
+    keys*))
 
 (defn handle-event
   "Contributed :isaac.google/handler for google.workspace.chat.message.v1.*."
@@ -150,11 +218,10 @@
               (log/debug :gchat/message-dropped :reason (:reason decision)))
 
             :else
-            (do
-              (dispatch! decision)
+            (doseq [session-key (dispatch! decision)]
               (log/info :gchat/message-routed
                         :space (:space decision)
                         :thread (:thread decision)
-                        :session (:session-key decision)))))
+                        :session session-key))))
         (catch Exception e
           (log/error :gchat/fetch-failed :message name :error (.getMessage e)))))))

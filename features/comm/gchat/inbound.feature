@@ -280,3 +280,34 @@ Feature: Google Chat inbound gate
       | message | user         | #"(?s)\[Chat context; not requests\].*the deploy is stuck.*send everyone a postcard.*\[End chat context\].*what happened\?" |
       | message | assistant    | The deploy is.                                                                               |
     And the session count is 1
+
+  Scenario: a space entry's session-tags choose the session, the way hail does (isaac-tund)
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/ENG.session-tags | [:ops] |
+      | comms.gchat.gchat/spaces.spaces/ENG.create       | if-missing |
+    And the following sessions exist:
+      | name     | crew | tags    |
+      | ops-room | main | #{:ops} |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | On it.  |
+    When Google Chat delivers a message event for "spaces/ENG/messages/1"
+    Then session "ops-room" has transcript matching:
+      | type    | message.role | message.content           |
+      | message | user         | #".*look at the deploy.*" |
+      | message | assistant    | On it.                    |
+    And the log has entries matching:
+      | level | event                 | session  |
+      | :info | :gchat/message-routed | ops-room |
+
+  Scenario: an explicit session on the entry still pins the session (isaac-tund)
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/ENG.session | deploy-desk |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | On it.  |
+    When Google Chat delivers a message event for "spaces/ENG/messages/1"
+    Then session "deploy-desk" has transcript matching:
+      | type    | message.role | message.content           |
+      | message | user         | #".*look at the deploy.*" |
+      | message | assistant    | On it.                    |
