@@ -7,6 +7,7 @@
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.format :as fmt]
     [isaac.comm.gchat.target :as target]
+    [isaac.comm.gchat.tenant :as tenant]
     [isaac.comm.protocol :as comm]
     [isaac.config.root :as root]
     [isaac.logger :as log]
@@ -17,8 +18,12 @@
 (defn- slice [comm]
   (or @(.-cfg comm) {}))
 
-(defn access-token []
-  ((requiring-resolve 'isaac.google.token/token)))
+(defn access-token
+  "The Google access token to post as. With a comm's config slice, it is that
+   comm's organization's token; with none, the organization this thread is
+   already acting as (isaac-1zkz)."
+  ([] ((requiring-resolve 'isaac.google.token/token)))
+  ([slice] ((requiring-resolve 'isaac.google.token/token) (tenant/of-comm slice))))
 
 (defn- post-chunks! [space thread text cap token]
   (let [chunks (fmt/split-content (fmt/->chat-text text) cap)]
@@ -35,7 +40,7 @@
 (defn- send!* [comm record]
   (try
     (let [cfg    (slice comm)
-          token  (access-token)
+          token  (access-token cfg)
           cap    (or (:gchat/message-cap cfg) fmt/default-message-cap)
           text   (:content record)
           to     (:gchat/to record)
@@ -64,7 +69,7 @@
   (when-let [{:keys [space thread]} (get @origin-by-session session-key)]
     (when (seq (str/trim (str text)))
       (let [cfg   (slice comm)
-            token (access-token)
+            token (access-token cfg)
             cap   (or (:gchat/message-cap cfg) fmt/default-message-cap)]
         (post-chunks! space thread text cap token)))))
 

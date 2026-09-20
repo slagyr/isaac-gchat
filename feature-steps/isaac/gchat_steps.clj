@@ -16,6 +16,8 @@
     [isaac.config.loader :as loader]
     [isaac.fs :as fs]
     [isaac.google.people :as people]
+    [isaac.google.tenants :as tenants]
+    [isaac.google.token :as google-token]
     [isaac.llm.api.grover :as grover]
     [isaac.llm.auth.store :as auth-store]
     [isaac.logger :as log]
@@ -129,12 +131,12 @@
   (when-not (get-method comm-factory/create :gchat)
     (require 'isaac.comm.gchat)))
 
-(defn- load-gchat-cfg []
+(defn- load-comm-cfg [name]
   (let [fs*  (feature-fs)
         root (root-dir)
         cfg  (:config (loader/load-config-result {:root root :fs fs*}))]
-    (or (get-in cfg [:comms :gchat])
-        (get-in cfg [:comms "gchat"])
+    (or (get-in cfg [:comms (keyword name)])
+        (get-in cfg [:comms (clojure.core/name name)])
         {})))
 
 (defn- record-http! [req]
@@ -175,28 +177,51 @@
   (or (get (g/get :gchat-api-messages) name)
       (throw (ex-info (str "no Chat API stub for " name) {:name name}))))
 
-(defn- gchat-access-token []
-  (or (g/get :gchat-access-token)
-      (when-let [tokens (with-feature-fs
+(defn- stored-access-token
+  "The access token one organization has in the auth store, or the token every
+   gchat scenario that never signed in has been using."
+  [id]
+  (or (when-let [tokens (with-feature-fs
                           (fn []
                             (auth-store/load-tokens (or (root-dir) "target/test-state")
-                                                    "google"
+                                                    (tenants/auth-provider id)
                                                     (feature-fs))))]
         (or (:access tokens) (:access_token tokens)))
       "at-1"))
 
-(defn gchat-outbound-comm-registered []
+(defn- stub-google-token
+  "Stands in for isaac.google.token/token so a scenario need not refresh, and
+   answers per organization so which one the comm asked for is visible."
+  ([] (stub-google-token nil))
+  ([id] (stored-access-token (or id tenants/DEFAULT))))
+
+(defn gchat-comm-registered
+  "Register one configured Chat comm by name as the comm under test."
+  [name]
   (ensure-gchat-factory!)
   (inject-gchat-module!)
   (ensure-session-store!)
   (let [fs*  (feature-fs)
         root (root-dir)
-        comm (gchat/make {:name :gchat :root root})
+        comm (gchat/make {:name (keyword name) :root root})
         cfg  (nexus/-with-nested-nexus {:fs fs* :root root}
-               (load-gchat-cfg))]
+               (load-comm-cfg name))]
     (reset! (.-cfg comm) cfg)
-    (comm-registry/register-instance! "gchat" comm)
+    (comm-registry/register-instance! (clojure.core/name name) comm)
     (g/assoc! :gchat-comm comm)))
+
+(defn gchat-outbound-comm-registered []
+  (gchat-comm-registered "gchat"))
+
+(defn google-auth-store-for-organization
+  "Seed one organization's tokens in the auth store."
+  [organization at rt]
+  (with-feature-fs
+    (fn []
+      (auth-store/save-tokens! (root-dir)
+                               (tenants/auth-provider (keyword organization))
+                               {:access_token at :refresh_token rt :expires_in 3600}
+                               (feature-fs)))))
 
 (defn chat-api-has-no-dm [email]
   (g/update! :gchat-http-stub (fnil assoc {}) :no-dm true :no-dm-email email))
@@ -221,12 +246,10 @@
         (g/should= value (str actual))))))
 
 (defn- with-chat-stubs [f]
-  (let [token (gchat-access-token)]
-    (g/assoc! :gchat-access-token token)
-    (with-redefs [chat-api/get-message! stub-get-message!
-                  chat-api/-http!       stub-http!
-                  gchat/access-token    (constantly token)]
-      (f))))
+  (with-redefs [chat-api/get-message! stub-get-message!
+                chat-api/-http!       stub-http!
+                google-token/token    stub-google-token]
+    (f)))
 
 (defn google-chat-delivers [name]
   (ensure-gchat-factory!)
@@ -260,17 +283,24 @@
         fs*    (feature-fs)
         root   (root-dir)
         cfg    (nexus/-with-nested-nexus {:fs fs* :root root}
-                 (load-gchat-cfg))]
+                 (load-comm-cfg (:name (.-host comm))))]
     (reset! (.-cfg comm) cfg)
-    (with-chat-stubs
-      (fn []
-        (comm/send! comm record)))))
+    (nexus/-with-nested-nexus {:fs fs* :root root}
+      (with-chat-stubs
+        (fn []
+          (comm/send! comm record))))))
 
 (defgiven #"the Chat API returns message \"([^\"]+)\":"
   isaac.gchat-steps/chat-api-returns)
 
 (defgiven "gchat outbound comm is registered"
   isaac.gchat-steps/gchat-outbound-comm-registered)
+
+(defgiven #"gchat comm \"([^\"]+)\" is registered"
+  isaac.gchat-steps/gchat-comm-registered)
+
+(defgiven #"the google auth store for organization \"([^\"]+)\" has access \"([^\"]+)\" and refresh \"([^\"]+)\""
+  isaac.gchat-steps/google-auth-store-for-organization)
 
 (defgiven #"the Chat API has no direct message space with \"([^\"]+)\""
   isaac.gchat-steps/chat-api-has-no-dm)

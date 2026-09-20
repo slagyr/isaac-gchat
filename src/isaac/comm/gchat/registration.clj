@@ -1,10 +1,16 @@
 (ns isaac.comm.gchat.registration
-  "Chat contribution to :isaac.google/registration — one pointer subscription per space."
+  "Chat contribution to :isaac.google/registration — one pointer subscription per space.
+
+   A reconcile pass runs once per Google organization with `tenants/*tenant*`
+   bound, so both halves of this contribution answer for that organization
+   alone: the keys are its comms' spaces, and they subscribe to its topic
+   (isaac-1zkz)."
   (:require
-    [isaac.comm.gchat.handler :as handler]
+    [isaac.comm.gchat.tenant :as tenant]
     [isaac.config.loader :as loader]
     [isaac.config.root :as root]
     [isaac.fs :as fs]
+    [isaac.google.tenants :as tenants]
     [isaac.nexus :as nexus]))
 
 (def EVENT-TYPES
@@ -18,7 +24,7 @@
 (defn- full-cfg []
   (let [root (or (nexus/get :root) (root/current-root))
         snap (loader/snapshot "gchat registration")
-        cfg  (if (get-in snap [:google :topic])
+        cfg  (if (seq (tenants/tenants snap))
                snap
                (or (when root
                      (:config (loader/load-config-result {:root root :fs (feature-fs)})))
@@ -34,16 +40,18 @@
     :else (str k)))
 
 (defn space-keys
-  "Configured Chat space resource names (spaces/ENG)."
+  "Configured Chat space resource names (spaces/ENG) of the organization this
+   reconcile pass is acting for."
   []
-  (let [spaces (or (:gchat/spaces (handler/-load-cfg)) {})]
-    (vec (sort (map space-name (keys spaces))))))
+  (let [cfg (full-cfg)]
+    (vec (sort (map space-name (tenant/spaces-for cfg (tenants/resolve-id cfg nil)))))))
 
 (defn expiry [sub]
   (or (:expireTime sub) (:expires-at sub)))
 
 (defn create! [key]
-  (let [topic (get-in (full-cfg) [:google :topic])]
+  (let [cfg   (full-cfg)
+        topic (get-in cfg (conj (tenants/config-path cfg (tenants/resolve-id cfg nil)) :topic))]
     ((requiring-resolve 'isaac.google.events/create-subscription!)
       {:targetResource         (str "//chat.googleapis.com/" key)
        :eventTypes             EVENT-TYPES

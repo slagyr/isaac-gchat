@@ -6,7 +6,9 @@
 
  :isaac.http/comm
  {:gchat {:namespace    isaac.comm.gchat
-          :extra-schema {:gchat/account     {:type        :string
+          :extra-schema {:google            {:type        :keyword
+                                             :description "Google organization (tenant) this comm speaks for: it sends with that organization's token and its spaces subscribe to that organization's topic. Omit on a host with one organization."}
+                         :gchat/account     {:type        :string
                                              :description "Google account email of the Isaac user (echo drop)."}
                          :gchat/allow-from  {:type        :seq
                                              :spec        {:type :string}
