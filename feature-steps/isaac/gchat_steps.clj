@@ -4,7 +4,7 @@
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as str]
-    [gherclj.core :as g :refer [defgiven defwhen helper!]]
+    [gherclj.core :as g :refer [defgiven defthen defwhen helper!]]
     [isaac.comm.factory :as comm-factory]
     [isaac.comm.gchat :as gchat]
     [isaac.comm.gchat.chat-api :as chat-api]
@@ -14,8 +14,10 @@
     [isaac.config.api :as config]
     [isaac.config.loader :as loader]
     [isaac.fs :as fs]
+    [isaac.google.people :as people]
     [isaac.llm.api.grover :as grover]
     [isaac.llm.auth.store :as auth-store]
+    [isaac.logger :as log]
     [isaac.module.discovery :as discovery]
     [isaac.nexus :as nexus]
     [isaac.session.session-steps :as session-steps]
@@ -28,7 +30,9 @@
   (fn []
     (alter-var-root #'discovery/*foundation-index-override* (constantly nil))
     (g/dissoc! :gchat-comm)
-    (g/dissoc! :gchat-http-stub)))
+    (g/dissoc! :gchat-http-stub)
+    ;; the people memo and its warn-once marks outlive a scenario otherwise
+    (people/reset-memo!)))
 
 (defn- kv-cells->map [cells]
   (when (and (seq cells) (even? (count cells)))
@@ -199,6 +203,12 @@
 (defn chat-api-creates-space-on-setup [name]
   (g/update! :gchat-http-stub (fnil assoc {}) :setup-space name))
 
+(defn log-entry-count [n event]
+  (let [n     (if (string? n) (parse-long n) n)
+        event (keyword (str/replace (str event) #"^:" ""))
+        hits  (filter #(= event (:event %)) (log/get-entries))]
+    (g/should= n (count hits))))
+
 (defn- with-chat-stubs [f]
   (let [token (gchat-access-token)]
     (g/assoc! :gchat-access-token token)
@@ -262,3 +272,6 @@
 
 (defwhen "gchat comm send! is invoked with:"
   isaac.gchat-steps/gchat-comm-send!)
+
+(defthen #"exactly (\d+) log entr(?:y|ies) has event \"([^\"]+)\""
+  isaac.gchat-steps/log-entry-count)

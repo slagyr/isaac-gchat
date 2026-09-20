@@ -1,7 +1,13 @@
 (ns isaac.comm.gchat.gate
-  "Deterministic inbound gate: event + config → :route | :drop reason."
+  "Deterministic inbound gate: event + config → :route | :drop reason.
+   Chat names a human sender users/<id> and never an email, so the caller may
+   pass :resolve-person (isaac.google.people/resolve) to look the email up at
+   decision time. The lookup is the only impure edge and it fails soft: without
+   it — or when it fails — an allow-list still matches users/<id> or
+   domain:<domainId>."
   (:require
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    [isaac.google.people :as people]))
 
 (defn session-name
   "Default session id for a Chat space: gchat-<space with / → ->."
@@ -81,22 +87,42 @@
 (defn- sender-domain [message]
   (get-in message [:sender :domainId]))
 
+(defn- sender-display-name [message]
+  (get-in message [:sender :displayName]))
+
+(defn- resolved-person
+  "Ask Google who users/<id> is — only when Chat withheld the email and the
+   caller supplied a resolver. Never throws, may answer nil."
+  [message resolve-person]
+  (let [user (sender-user message)]
+    (when (and resolve-person
+               (nil? (sender-email message))
+               (seq (str (or user ""))))
+      (try
+        (resolve-person user {:display-name (sender-display-name message)})
+        (catch Exception _ nil)))))
+
 (defn sender-identity
-  "What the gate knows about who sent this: email when Google supplies it,
-   the users/<id> resource, and the Workspace domainId. spaces.messages.get
-   under user auth returns users/<id> + domainId and NO email for human
-   senders, so an allow-list must be able to name those."
-  [message]
-  {:email  (sender-email message)
-   :user   (sender-user message)
-   :domain (sender-domain message)})
+  "What the gate knows about who sent this: email when Google supplies it or
+   the People API resolves it, the users/<id> resource, the Workspace domainId,
+   and the display name. spaces.messages.get under user auth returns
+   users/<id> + domainId and NO email for human senders, so an allow-list must
+   be able to name those too."
+  ([message] (sender-identity message {}))
+  ([message {:keys [resolve-person]}]
+   (let [person (resolved-person message resolve-person)
+         name   (or (sender-display-name message) (:display-name person))]
+     (cond-> {:email  (or (sender-email message) (:email person))
+              :user   (sender-user message)
+              :domain (sender-domain message)}
+       (seq (str (or name ""))) (assoc :display-name name)))))
 
 (defn- allowed-sender?
   "An allow-from entry matches by email, by users/<id>, or by domain:<domainId>
    (the Workspace customer id, as Chat reports it in sender.domainId)."
-  [cfg message]
+  [cfg identity]
   (let [allow (allow-from cfg)
-        {:keys [email user domain]} (sender-identity message)]
+        {:keys [email user domain]} identity]
     (boolean
       (and (seq allow)
            (some (fn [entry]
@@ -107,41 +133,44 @@
                  allow)))))
 
 (defn decide
-  "Pure: cfg + fetched Chat message → {:action :route ...} | {:action :drop :reason kw}."
-  [cfg message]
-  (let [email  (sender-email message)
-        space  (space-name message)
-        thread (thread-name message)
-        account (:gchat/account cfg)]
-    (cond
-      (and (seq account) (= email account))
-      {:action :drop :reason :self}
+  "cfg + fetched Chat message → {:action :route ...} | {:action :drop :reason kw}.
+   Pure but for the optional :resolve-person lookup in `opts`."
+  ([cfg message] (decide cfg message {}))
+  ([cfg message opts]
+    (let [identity (sender-identity message opts)
+          email  (:email identity)
+          space  (space-name message)
+          thread (thread-name message)
+          account (:gchat/account cfg)]
+      (cond
+        (and (seq account) (= email account))
+        {:action :drop :reason :self}
 
-      (not (allowed-sender? cfg message))
-      {:action :drop :reason :sender :sender (sender-identity message)}
+        (not (allowed-sender? cfg identity))
+        {:action :drop :reason :sender :sender identity}
 
-      (and (not (dm? message)) (nil? (space-cfg cfg space)))
-      {:action :drop :reason :space}
+        (and (not (dm? message)) (nil? (space-cfg cfg space)))
+        {:action :drop :reason :space}
 
-      :else
-      (let [policy (policy-kw (respond-policy cfg message))]
-        (cond
-          (= :never policy)
-          {:action :drop :reason :policy}
+        :else
+        (let [policy (policy-kw (respond-policy cfg message))]
+          (cond
+            (= :never policy)
+            {:action :drop :reason :policy}
 
-          (and (= :mentions policy) (not (mentioned? message)))
-          {:action :drop :reason :no-mention}
+            (and (= :mentions policy) (not (mentioned? message)))
+            {:action :drop :reason :no-mention}
 
-          :else
-          {:action      :route
-           :space       space
-           :thread      thread
-           :session-key (or (get (space-cfg cfg space) :session)
-                            (session-name space))
-           :crew        (or (get (space-cfg cfg space) :crew)
-                            (:crew cfg)
-                            "main")
-           :space-cfg   (space-cfg cfg space)
-           :dm?         (dm? message)
-           :text        (or (:text message) "")
-           :sender      (or email (sender-user message))})))))
+            :else
+            {:action      :route
+             :space       space
+             :thread      thread
+             :session-key (or (get (space-cfg cfg space) :session)
+                              (session-name space))
+             :crew        (or (get (space-cfg cfg space) :crew)
+                              (:crew cfg)
+                              "main")
+             :space-cfg   (space-cfg cfg space)
+             :dm?         (dm? message)
+             :text        (or (:text message) "")
+             :sender      (people/render identity)}))))))

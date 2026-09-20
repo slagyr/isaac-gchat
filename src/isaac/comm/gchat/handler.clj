@@ -9,6 +9,7 @@
     [isaac.config.loader :as loader]
     [isaac.config.root :as root]
     [isaac.fs :as fs]
+    [isaac.google.people :as people]
     [isaac.logger :as log]
     [isaac.nexus :as nexus]))
 
@@ -71,7 +72,7 @@
   (ensure-session! decision)
   (let [ch (live-comm (-load-cfg))]
     (api/dispatch! (cond-> {:session-key (:session-key decision)
-                            :input       (str (:sender decision) " " (:text decision))
+                            :input       (str (:sender decision) ": " (:text decision))
                             :origin      (origin decision)
                             :crew        (:crew decision)
                             :config      (full-config)}
@@ -85,7 +86,8 @@
       (log/error :gchat/fetch-failed :error "missing message name")
       (try
         (let [message  (chat-api/get-message! name)
-              decision (gate/decide (-load-cfg) message)]
+              decision (gate/decide (-load-cfg) message
+                                    {:resolve-person people/resolve})]
           (if (= :drop (:action decision))
             (if (= :sender (:reason decision))
               ;; the one drop an operator must see: it names the identity to allow

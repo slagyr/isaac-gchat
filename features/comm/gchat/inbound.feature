@@ -112,6 +112,87 @@ Feature: Google Chat inbound gate
       | level | event                 |
       | :info | :gchat/message-routed |
 
+  Scenario: an email allow-list admits a Chat sender whose id resolves to that email
+    Given config:
+      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"] |
+    And the Google People API knows "users/118" as "Micah Martin" with email "micah@tonotop.com"
+    And the Chat API returns message "spaces/ENG/messages/6":
+      | sender.name         | users/118             |
+      | sender.displayName  | Micah Martin          |
+      | sender.domainId     | 0ivzlyj               |
+      | thread.name         | spaces/ENG/threads/T6 |
+      | text                | @Isaac hi             |
+      | annotations.mention | users/yopp            |
+    When Google Chat delivers a message event for "spaces/ENG/messages/6"
+    Then the session count is 1
+    And the log has entries matching:
+      | level | event                 |
+      | :info | :gchat/message-routed |
+
+  Scenario: the turn input names who spoke
+    Given config:
+      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"] |
+    And the Google People API knows "users/118" as "Micah Martin" with email "micah@tonotop.com"
+    And the Chat API returns message "spaces/ENG/messages/7":
+      | sender.name         | users/118                |
+      | sender.displayName  | Micah Martin             |
+      | sender.domainId     | 0ivzlyj                  |
+      | thread.name         | spaces/ENG/threads/T7    |
+      | text                | @Isaac can you look?     |
+      | annotations.mention | users/yopp               |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | On it.  |
+    When Google Chat delivers a message event for "spaces/ENG/messages/7"
+    Then session "gchat-spaces-ENG" has transcript matching:
+      | type    | message.role | message.content                                     |
+      | message | user         | #"Micah Martin <micah@tonotop\.com>: @Isaac can you look\?" |
+      | message | assistant    | On it.                                              |
+
+  Scenario: without the directory scope the allow-list falls back to users/<id> and warns once
+    Given config:
+      | comms.gchat.gchat/allow-from | ["users/118", "users/119"] |
+    And the Google People API refuses with 403 "Request had insufficient authentication scopes."
+    And the Chat API returns message "spaces/ENG/messages/8":
+      | sender.name         | users/118             |
+      | sender.displayName  | Micah Martin          |
+      | sender.domainId     | 0ivzlyj               |
+      | thread.name         | spaces/ENG/threads/T8 |
+      | text                | @Isaac hi             |
+      | annotations.mention | users/yopp            |
+    And the Chat API returns message "spaces/ENG/messages/8b":
+      | sender.name         | users/119             |
+      | sender.displayName  | Ada Lovelace          |
+      | sender.domainId     | 0ivzlyj               |
+      | thread.name         | spaces/ENG/threads/T8 |
+      | text                | @Isaac hi again       |
+      | annotations.mention | users/yopp            |
+    When Google Chat delivers a message event for "spaces/ENG/messages/8"
+    And Google Chat delivers a message event for "spaces/ENG/messages/8b"
+    Then the session count is 1
+    And the log has entries matching:
+      | level | event                        | scope                                              |
+      | :warn | :google.people/scope-missing | https://www.googleapis.com/auth/directory.readonly |
+      | :info | :gchat/message-routed        |                                                    |
+    And exactly 1 log entry has event ":google.people/scope-missing"
+
+  Scenario: a failed lookup does not block a sender the id list already admits
+    Given config:
+      | comms.gchat.gchat/allow-from | ["domain:0ivzlyj"] |
+    And the Google People API refuses with 500 "backend error"
+    And the Chat API returns message "spaces/ENG/messages/9":
+      | sender.name         | users/999             |
+      | sender.displayName  | Ada Lovelace          |
+      | sender.domainId     | 0ivzlyj               |
+      | thread.name         | spaces/ENG/threads/T9 |
+      | text                | @Isaac hi             |
+      | annotations.mention | users/yopp            |
+    When Google Chat delivers a message event for "spaces/ENG/messages/9"
+    Then the session count is 1
+    And the log has entries matching:
+      | level | event                 |
+      | :info | :gchat/message-routed |
+
   Scenario: a space with respond policy all answers without a mention
     Given config:
       | comms.gchat.gchat/spaces.spaces/ENG.respond | all |
