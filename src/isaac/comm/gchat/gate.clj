@@ -179,8 +179,17 @@
             (= :never policy)
             {:action :drop :reason :policy}
 
+            ;; Not spoken to, but in a space Isaac belongs to: heard, not
+            ;; answered. The handler keeps the line so the next mention has
+            ;; context (isaac-iv5c).
             (and (= :mentions policy) (not (mentioned? message)))
-            {:action :drop :reason :no-mention}
+            {:action   :log
+             :reason   :logged
+             :space    space
+             :thread   thread
+             :text     (or (:text message) "")
+             :sender   (people/render identity)
+             :identity identity}
 
             :else
             {:action      :route

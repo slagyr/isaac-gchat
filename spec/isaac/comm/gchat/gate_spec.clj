@@ -42,10 +42,13 @@
       (should= "spaces/ENG/threads/T1" (:thread result))
       (should= "gchat-spaces-ENG" (:session-key result))))
 
-  (it "drops a space message with no mention under the default policy"
+  (it "hears a space message with no mention but does not answer it"
     (let [result (sut/decide cfg (message :mention nil :text "lunch anyone?"))]
-      (should= :drop (:action result))
-      (should= :no-mention (:reason result))))
+      (should= :log (:action result))
+      (should= :logged (:reason result))
+      (should= "spaces/ENG" (:space result))
+      (should= "lunch anyone?" (:text result))
+      (should= "ada@tonotop.com" (:sender result))))
 
   (it "routes a DM without a mention"
     (let [result (sut/decide cfg (message :name "spaces/DM1/messages/1"

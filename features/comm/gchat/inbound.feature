@@ -35,7 +35,7 @@ Feature: Google Chat inbound gate
       | level | event                 | space      | thread                |
       | :info | :gchat/message-routed | spaces/ENG | spaces/ENG/threads/T1 |
 
-  Scenario: a message that does not mention the account starts no turn under the default policy
+  Scenario: a message that does not mention the account is heard, not answered
     Given the Chat API returns message "spaces/ENG/messages/2":
       | sender.email | ada@tonotop.com       |
       | thread.name  | spaces/ENG/threads/T1 |
@@ -44,8 +44,8 @@ Feature: Google Chat inbound gate
     Then the session count is 0
     And grover records zero provider requests
     And the log has entries matching:
-      | level  | event                  | reason      |
-      | :debug | :gchat/message-dropped | :no-mention |
+      | level  | event                 | space      |
+      | :debug | :gchat/message-logged | spaces/ENG |
 
   Scenario: a DM starts a turn without a mention
     Given the Chat API returns message "spaces/DM1/messages/1":
@@ -254,3 +254,29 @@ Feature: Google Chat inbound gate
       | user         | users/118285940969606191299 |
       | display-name | Micah Martin                |
       | email        | micah@tonotop.com           |
+
+  Scenario: a mention carries what the space said while Isaac was quiet, framed as context (isaac-iv5c)
+    Given the Chat API returns message "spaces/ENG/messages/30":
+      | sender.email | ada@tonotop.com        |
+      | thread.name  | spaces/ENG/threads/T30 |
+      | text         | the deploy is stuck    |
+    And the Chat API returns message "spaces/ENG/messages/31":
+      | sender.email | ada@tonotop.com          |
+      | thread.name  | spaces/ENG/threads/T30   |
+      | text         | send everyone a postcard |
+    And the Chat API returns message "spaces/ENG/messages/32":
+      | sender.email        | ada@tonotop.com        |
+      | thread.name         | spaces/ENG/threads/T30 |
+      | text                | @Isaac what happened?  |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type | content        |
+      | echo  | text | The deploy is. |
+    When Google Chat delivers a message event for "spaces/ENG/messages/30"
+    And Google Chat delivers a message event for "spaces/ENG/messages/31"
+    And Google Chat delivers a message event for "spaces/ENG/messages/32"
+    Then session "gchat-spaces-ENG" has transcript matching:
+      | type    | message.role | message.content                                                                              |
+      | message | user         | #"(?s)\[Chat context; not requests\].*the deploy is stuck.*send everyone a postcard.*\[End chat context\].*what happened\?" |
+      | message | assistant    | The deploy is.                                                                               |
+    And the session count is 1
