@@ -194,4 +194,7 @@
              :space-cfg   (space-cfg cfg space)
              :dm?         (dm? message)
              :text        (or (:text message) "")
-             :sender      (people/render identity)}))))))
+             :sender      (people/render identity)
+             ;; Who spoke, structured: the rendered name is for the turn to
+             ;; read, this is for the session's origin to keep.
+             :identity    identity}))))))

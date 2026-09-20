@@ -232,3 +232,25 @@ Feature: Google Chat inbound gate
       | level | event                  | reason  | sender.email        |
       | :info | :gchat/message-routed  |         |                     |
       | :info | :gchat/message-dropped | :sender | mallory@example.com |
+
+  Scenario: the session remembers who spoke, by an id a rename cannot orphan (isaac-bklu)
+    Given config:
+      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"] |
+    And the Google People API knows "users/118285940969606191299" as "Micah Martin" with email "micah@tonotop.com"
+    And the Chat API returns message "spaces/ENG/messages/22":
+      | sender.name         | users/118285940969606191299 |
+      | sender.displayName  | Micah Martin                |
+      | sender.domainId     | 0ivzlyj                     |
+      | thread.name         | spaces/ENG/threads/T22      |
+      | text                | @Isaac who am I?            |
+      | annotations.mention | users/yopp                  |
+    And the following model responses are queued:
+      | model | type | content   |
+      | echo  | text | You, Micah. |
+    When Google Chat delivers a message event for "spaces/ENG/messages/22"
+    Then session "gchat-spaces-ENG" has origin:
+      | kind         | :gchat                      |
+      | space        | spaces/ENG                  |
+      | user         | users/118285940969606191299 |
+      | display-name | Micah Martin                |
+      | email        | micah@tonotop.com           |

@@ -5,6 +5,7 @@
     [clojure.java.io :as io]
     [clojure.string :as str]
     [gherclj.core :as g :refer [defgiven defthen defwhen helper!]]
+    [isaac.api :as api]
     [isaac.comm.factory :as comm-factory]
     [isaac.comm.gchat :as gchat]
     [isaac.comm.gchat.chat-api :as chat-api]
@@ -209,6 +210,16 @@
         hits  (filter #(= event (:event %)) (log/get-entries))]
     (g/should= n (count hits))))
 
+(defn session-origin-matches
+  "The session's :origin, field by field, as the table names them."
+  [key table]
+  (let [session  (api/get-session key)
+        origin   (or (:origin session) (get session "origin") {})
+        expected (table-map table)]
+    (doseq [[field value] expected]
+      (let [actual (or (get origin (keyword field)) (get origin field))]
+        (g/should= value (str actual))))))
+
 (defn- with-chat-stubs [f]
   (let [token (gchat-access-token)]
     (g/assoc! :gchat-access-token token)
@@ -275,3 +286,6 @@
 
 (defthen #"exactly (\d+) log entr(?:y|ies) has event \"([^\"]+)\""
   isaac.gchat-steps/log-entry-count)
+
+(defthen #"session \"([^\"]+)\" has origin:"
+  isaac.gchat-steps/session-origin-matches)

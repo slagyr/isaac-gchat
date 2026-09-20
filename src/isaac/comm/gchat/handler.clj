@@ -35,10 +35,18 @@
       (get-in event [:data :messageName])
       (get-in event [:data "message" "name"])))
 
-(defn- origin [decision]
-  {:kind   :gchat
-   :space  (:space decision)
-   :thread (:thread decision)})
+(defn- origin
+  "What the session records about where it came from. The sender is kept as
+   Google gave it — users/<id> never changes, a display name does — so a
+   transcript can still say who spoke after a rename (isaac-bklu)."
+  [decision]
+  (let [{:keys [user display-name email]} (:identity decision)]
+    (cond-> {:kind   :gchat
+             :space  (:space decision)
+             :thread (:thread decision)}
+      (seq (str (or user "")))         (assoc :user user)
+      (seq (str (or display-name ""))) (assoc :display-name display-name)
+      (seq (str (or email "")))        (assoc :email email))))
 
 (defn- ensure-session! [decision]
   (or (api/get-session (:session-key decision))
