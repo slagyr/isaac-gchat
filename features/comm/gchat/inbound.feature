@@ -208,3 +208,27 @@ Feature: Google Chat inbound gate
       | type    | message.role | message.content      |
       | message | user         | #".*lunch anyone\?.*" |
       | message | assistant    | Tacos.               |
+
+  Scenario: a *@domain allow-list entry admits the whole domain and nobody else (isaac-dymn)
+    Given config:
+      | comms.gchat.gchat/allow-from | ["*@tonotop.com"] |
+    And the Chat API returns message "spaces/ENG/messages/20":
+      | sender.email        | grace@tonotop.com      |
+      | thread.name         | spaces/ENG/threads/T20 |
+      | text                | @Isaac ship it         |
+      | annotations.mention | users/yopp             |
+    And the Chat API returns message "spaces/ENG/messages/21":
+      | sender.email        | mallory@example.com    |
+      | thread.name         | spaces/ENG/threads/T21 |
+      | text                | @Isaac ship it         |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type | content   |
+      | echo  | text | Shipping. |
+    When Google Chat delivers a message event for "spaces/ENG/messages/20"
+    And Google Chat delivers a message event for "spaces/ENG/messages/21"
+    Then the session count is 1
+    And the log has entries matching:
+      | level | event                  | reason  | sender.email        |
+      | :info | :gchat/message-routed  |         |                     |
+      | :info | :gchat/message-dropped | :sender | mallory@example.com |

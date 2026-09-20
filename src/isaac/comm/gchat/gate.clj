@@ -117,9 +117,30 @@
               :domain (sender-domain message)}
        (seq (str (or name ""))) (assoc :display-name name)))))
 
+(defn- email-domain [email]
+  (let [email (str/lower-case (str (or email "")))
+        at    (str/last-index-of email "@")]
+    (when (and at (< (inc at) (count email)))
+      (subs email (inc at)))))
+
+(defn email-matches?
+  "An allow-from entry against an email. \"*@tonotop.com\" admits every address
+   in that domain; anything else is an exact, case-insensitive match. Chat's
+   sender email comes from Google, so a domain pattern here is as trustworthy
+   as the address itself — unlike Gmail, where From: is forgeable."
+  [entry email]
+  (let [entry (str/lower-case (str (or entry "")))
+        email (str/lower-case (str (or email "")))]
+    (boolean
+      (and (seq entry) (seq email)
+           (if (str/starts-with? entry "*@")
+             (= (subs entry 2) (email-domain email))
+             (= entry email))))))
+
 (defn- allowed-sender?
-  "An allow-from entry matches by email, by users/<id>, or by domain:<domainId>
-   (the Workspace customer id, as Chat reports it in sender.domainId)."
+  "An allow-from entry matches by email (exactly or as *@domain), by
+   users/<id>, or by domain:<domainId> (the Workspace customer id, as Chat
+   reports it in sender.domainId)."
   [cfg identity]
   (let [allow (allow-from cfg)
         {:keys [email user domain]} identity]
@@ -127,7 +148,7 @@
       (and (seq allow)
            (some (fn [entry]
                    (let [entry (str entry)]
-                     (or (and (seq email) (= entry email))
+                     (or (email-matches? entry email)
                          (and (seq user) (= entry user))
                          (and (seq domain) (= entry (str "domain:" domain))))))
                  allow)))))

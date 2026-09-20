@@ -147,4 +147,44 @@
       (let [d (sut/decide cfg human {:resolve-person (resolver {:email account})})]
         (should= :drop (:action d))
         (should= :self (:reason d)))))
+
+  (context "allow-from patterns (isaac-dymn)"
+
+    (it "admits every address in a domain the list names as *@domain"
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@tonotop.com"])]
+        (should= :route (:action (sut/decide cfg' (message :email "ada@tonotop.com"))))
+        (should= :route (:action (sut/decide cfg' (message :email "grace@tonotop.com"))))))
+
+    (it "matches a pattern and an address without regard to case"
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@Tonotop.com" "Ada@tonotop.com"])]
+        (should= :route (:action (sut/decide cfg' (message :email "GRACE@TONOTOP.COM"))))
+        (should= :route (:action (sut/decide cfg' (message :email "ada@TONOTOP.com"))))))
+
+    (it "drops an address outside the pattern's domain"
+      (let [cfg'   (assoc cfg :gchat/allow-from ["*@tonotop.com"])
+            result (sut/decide cfg' (message :email "mallory@example.com"))]
+        (should= :drop (:action result))
+        (should= :sender (:reason result))))
+
+    (it "does not let a domain pattern match an address that merely ends with it"
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@tonotop.com"])]
+        (should= :drop (:action (sut/decide cfg' (message :email "eve@nottonotop.com"))))
+        (should= :drop (:action (sut/decide cfg' (message :email "eve@tonotop.com.evil.net"))))))
+
+    (it "admits a Chat sender whose id resolves into the pattern's domain"
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@tonotop.com"])
+            d    (sut/decide cfg' human {:resolve-person (resolver {:display-name "Micah Martin"
+                                                                    :email        "micah@tonotop.com"})})]
+        (should= :route (:action d))
+        (should= "Micah Martin <micah@tonotop.com>" (:sender d))))
+
+    (it "still fails closed on an empty allow-from"
+      (let [cfg' (assoc cfg :gchat/allow-from [])]
+        (should= :drop (:action (sut/decide cfg' (message))))))
+
+    (it "matches an entry that is a bare pattern against nothing when the sender has no email"
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@tonotop.com"])
+            d    (sut/decide cfg' human {:resolve-person (constantly nil)})]
+        (should= :drop (:action d))
+        (should= :sender (:reason d)))))
   )
