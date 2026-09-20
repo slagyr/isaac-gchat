@@ -6,7 +6,7 @@
         io.github.slagyr/isaac-agent {:git/url "https://github.com/slagyr/isaac-agent.git"
                                           :git/sha "679aee82149d85f5e62a82988f7e1a4066a073cd"}
         io.github.slagyr/isaac-google {:git/url "https://github.com/slagyr/isaac-google.git"
-                                          :git/sha "fb98c58e834d2bb3e3a8e961ef1f7883b6e8eb3d"}
+                                          :git/sha "6c8a29f448bbbb33fb8cfd3eba8b1323b9593c24"}
         }
 
  :aliases

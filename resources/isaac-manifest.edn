@@ -1,5 +1,5 @@
 {:id          :isaac.comm.gchat
- :version     "0.1.8"
+ :version     "0.1.9"
  :builtin?    true
  :factory     isaac.comm.gchat.module/create-module
  :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
@@ -44,6 +44,14 @@
                                         :description "User email. Resolves via spaces.findDirectMessage; spaces.setup DIRECT_MESSAGE when absent."}
                          :gchat/thread {:type        :string
                                         :description "Optional thread resource (spaces/…/threads/…) to reply in."}}}}
+
+ ;; Chat tools on Isaac's own token and the crew's allow-list — a crew that
+ ;; needs to read further back, or to speak somewhere it was not addressed,
+ ;; asks Chat directly instead of shelling out (isaac-jqk2).
+ :isaac.agent/tools
+ {:gchat__spaces  {:factory isaac.comm.gchat.tools/spaces-tool-factory}
+  :gchat__history {:factory isaac.comm.gchat.tools/history-tool-factory}
+  :gchat__send    {:factory isaac.comm.gchat.tools/send-tool-factory}}
 
  :isaac.google/handler
  {"google.workspace.chat.message.v1.created" isaac.comm.gchat.handler/handle-event

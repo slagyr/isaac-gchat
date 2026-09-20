@@ -105,3 +105,35 @@
       (:body resp)
       (throw (ex-info (str "Chat API spaces:setup failed: " (:status resp))
                       {:status (:status resp) :body (:body resp) :email email})))))
+
+(defn list-spaces!
+  "GET spaces.list — the spaces the account is a member of."
+  [token & [{:keys [page-size page-token filter*]}]]
+  (let [resp (-http! {:method  "GET"
+                      :url     (str chat-base "/spaces")
+                      :headers {"Authorization" (str "Bearer " token)}
+                      :query   (cond-> {:pageSize (or page-size 100)}
+                                 page-token (assoc :pageToken page-token)
+                                 filter*    (assoc :filter filter*))})]
+    (if (<= 200 (:status resp) 299)
+      (:body resp)
+      (throw (ex-info (str "Chat API spaces.list failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp)})))))
+
+(defn list-messages!
+  "GET spaces.messages.list for a space, newest last. `filter*` takes Chat's
+   own filter syntax (createTime > \"…\"); `thread` narrows to one thread."
+  [token space & [{:keys [page-size page-token filter* thread]}]]
+  (let [filters (cond-> []
+                  (seq filter*) (conj filter*)
+                  (seq thread)  (conj (str "thread.name = \"" thread "\"")))
+        resp    (-http! {:method  "GET"
+                         :url     (str chat-base "/" space "/messages")
+                         :headers {"Authorization" (str "Bearer " token)}
+                         :query   (cond-> {:pageSize (or page-size 50)}
+                                    page-token    (assoc :pageToken page-token)
+                                    (seq filters) (assoc :filter (str/join " AND " filters)))})]
+    (if (<= 200 (:status resp) 299)
+      (:body resp)
+      (throw (ex-info (str "Chat API messages.list failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :space space})))))
