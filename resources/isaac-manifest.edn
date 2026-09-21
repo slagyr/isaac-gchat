@@ -10,6 +10,8 @@
                                              :description "Google organization (tenant) this comm speaks for: it sends with that organization's token and its spaces subscribe to that organization's topic. Omit on a host with one organization."}
                          :gchat/account     {:type        :string
                                              :description "Google account email of the Isaac user (echo drop)."}
+                         :gchat/account-id  {:type        :string
+                                             :description "Google Chat users/<id> of the Isaac user. Chat pushes Isaac's own replies back carrying users/<id> and no email, so matching :gchat/account alone cannot see them (isaac-mm7o). Learned automatically from the first outbound send; set it here to skip that wait."}
                          :gchat/allow-from  {:type        :seq
                                              :spec        {:type :string}
                                              :description "Inbound allowlist of senders: an email, *@domain for every address in a domain, a users/<id> resource name, or domain:<domainId> (the Workspace customer id Chat reports as sender.domainId). Chat's message API does not return emails for human senders under user auth, so users/… or domain:… is usually what you want. Missing or empty = fail-closed; a drop logs the sender's identity so it can be copied in."}

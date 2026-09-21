@@ -6,6 +6,8 @@
     [isaac.comm.factory :as comm-factory]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.gate :as gate]
+    [isaac.comm.gchat.self :as self]
+    [isaac.comm.gchat.tenant :as tenant]
     [isaac.comm.gchat.transcript :as transcript]
     [isaac.comm.registry :as comm-registry]
     [isaac.config.loader :as loader]
@@ -199,9 +201,16 @@
     (if-not name
       (log/error :gchat/fetch-failed :error "missing message name")
       (try
-        (let [message  (chat-api/get-message! name)
-              decision (gate/decide (-load-cfg) message
-                                    {:resolve-person people/resolve})]
+        (let [cfg      (-load-cfg)
+              message  (chat-api/get-message! name)
+              decision (gate/decide cfg message
+                                    {:resolve-person people/resolve
+                                     ;; Which organization this comm speaks for
+                                     ;; (isaac-1zkz), so self is never matched
+                                     ;; against another tenant's learned id
+                                     ;; (isaac-mm7o).
+                                     :account-user   (self/resolve-account-user
+                                                       (tenant/of-comm cfg) cfg)})]
           (cond
             (= :log (:action decision))
             (do

@@ -162,9 +162,15 @@
           email  (:email identity)
           space  (space-name message)
           thread (thread-name message)
-          account (:gchat/account cfg)]
+          account (:gchat/account cfg)
+          ;; Chat pushes Isaac's own replies back with users/<id> and no email,
+          ;; so email alone cannot see self. Without this an operator who allows
+          ;; domain:<id> gets an echo loop (isaac-mm7o).
+          account-user (or (:account-user opts) (:gchat/account-id cfg))]
       (cond
-        (and (seq account) (= email account))
+        (or (and (seq account) (= email account))
+            (and (seq (str (or account-user "")))
+                 (= (str account-user) (:user identity))))
         {:action :drop :reason :self}
 
         (not (allowed-sender? cfg identity))
