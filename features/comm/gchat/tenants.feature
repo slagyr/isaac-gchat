@@ -1,6 +1,6 @@
 Feature: Google Chat across several Google organizations
   One Isaac can carry several Google organizations (isaac-1zkz). A Chat comm
-  names the one it speaks for with `google`: it posts as that organization's
+  names the one it speaks for with `gchat/google`: it posts as that organization's
   Google user, with that organization's token, and its spaces subscribe to
   that organization's own topic in that organization's project. A host with
   one organization names none and nothing about it changes. Bean: isaac-1zkz.
@@ -13,11 +13,11 @@ Feature: Google Chat across several Google organizations
       | google.tonotop.topic                           | projects/marigold/topics/isaac  |
       | google.acme.project                            | acme-prod                       |
       | google.acme.topic                              | projects/acme-prod/topics/isaac |
-      | comms.gchat.google                             | tonotop                         |
+      | comms.gchat.gchat/google                             | tonotop                         |
       | comms.gchat.gchat/account                      | yopp@tonotop.com                |
       | comms.gchat.gchat/spaces.spaces/ENG.name       | engineering                     |
       | comms.gchat-acme.type                          | gchat                           |
-      | comms.gchat-acme.google                        | acme                            |
+      | comms.gchat-acme.gchat/google                        | acme                            |
       | comms.gchat-acme.gchat/account                 | isaac@acme.example              |
       | comms.gchat-acme.gchat/spaces.spaces/ACME.name | acme-eng                        |
     And the google auth store for organization "tonotop" has access "at-tonotop" and refresh "rt-tonotop"

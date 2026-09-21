@@ -2,7 +2,7 @@
   "Which Google organization a Chat comm speaks for.
 
    One Isaac can carry several Google organizations (isaac-1zkz). A comm names
-   its own with `:google <tenant>`; its sends use that organization's token and
+   its own with `:gchat/google <tenant>`; its sends use that organization's token and
    its spaces subscribe to that organization's topic. A host with one
    organization names none and every comm speaks for it, exactly as before.
    Which organization a comm speaks for is isaac.google.tenants' answer; this
