@@ -17,7 +17,7 @@
     (should= :isaac.comm.gchat (:id manifest)))
 
   (it "contributes the gchat comm impl"
-    (should= 'isaac.comm.gchat (get-in manifest [:isaac.http/comm :gchat :namespace])))
+    (should= 'isaac.comm.gchat (get-in manifest [:isaac.agent/comm :gchat :namespace])))
 
   (it "contributes Chat message handlers"
     (should= 'isaac.comm.gchat.handler/handle-event

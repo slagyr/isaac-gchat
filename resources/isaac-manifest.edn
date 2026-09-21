@@ -4,7 +4,7 @@
  :factory     isaac.comm.gchat.module/create-module
  :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
 
- :isaac.http/comm
+ :isaac.agent/comm
  {:gchat {:namespace    isaac.comm.gchat
           :extra-schema {:gchat/google      {:type        :keyword
                                              :description "Google organization (tenant) this comm speaks for: it sends with that organization's token and its spaces subscribe to that organization's topic. Omit on a host with one organization."}
