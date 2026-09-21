@@ -10,8 +10,8 @@ Feature: Google Chat registrations and renewal
     Given default Grover setup in "/test/gchat-registrations"
     And config:
       | log.output                                | memory                         |
-      | google.topic                              | projects/marigold/topics/isaac |
-      | google.renew-within-hours                 | 24                             |
+      | google.tonotop.topic                      | projects/marigold/topics/isaac |
+      | google.tonotop.renew-within-hours         | 24                             |
       | comms.gchat.gchat/account                 | yopp@tonotop.com               |
       | comms.gchat.gchat/spaces.spaces/ENG.name  | engineering                    |
       | comms.gchat.gchat/spaces.spaces/PROD.name | product                        |

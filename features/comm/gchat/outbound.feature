@@ -8,6 +8,7 @@ Feature: Google Chat outbound
     Given default Grover setup in "/test/gchat-outbound"
     And config:
       | log.output                               | memory              |
+      | google.tonotop.project                   | marigold            |
       | comms.gchat.gchat/account                | yopp@tonotop.com    |
       | comms.gchat.gchat/allow-from             | ["ada@tonotop.com"] |
       | comms.gchat.gchat/spaces.spaces/ENG.name | engineering         |

@@ -6,8 +6,8 @@
     [isaac.google.tenants :as tenants]
     [speclj.core :refer :all]))
 
-(def flat
-  {:google {:topic "projects/marigold/topics/isaac"}
+(def one-organization
+  {:google {:tonotop {:topic "projects/marigold/topics/isaac"}}
    :comms  {:gchat {:gchat/spaces {:spaces/ENG  {:name "engineering"}
                                    :spaces/PROD {:name "product"}}}}})
 
@@ -31,7 +31,7 @@
 (describe "gchat registration contribution"
 
   (it "keys are the configured space resource names"
-    (with-redefs [loader/snapshot (fn [_] flat)]
+    (with-redefs [loader/snapshot (fn [_] one-organization)]
       (should= ["spaces/ENG" "spaces/PROD"] (sut/space-keys))))
 
   (it "keys are only the spaces of the organization this pass acts for"
@@ -40,7 +40,7 @@
       (should= ["spaces/ENG"] (binding [tenants/*tenant* :tonotop] (sut/space-keys)))))
 
   (it "create body is pointer-only against the shared topic"
-    (let [body (created flat nil "spaces/ENG")]
+    (let [body (created one-organization nil "spaces/ENG")]
       (should= "//chat.googleapis.com/spaces/ENG" (:targetResource body))
       (should= false (get-in body [:payloadOptions :includeResource]))
       (should= "projects/marigold/topics/isaac" (get-in body [:notificationEndpoint :pubsubTopic]))

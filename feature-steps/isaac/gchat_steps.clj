@@ -179,13 +179,15 @@
 
 (defn- stored-access-token
   "The access token one organization has in the auth store, or the token every
-   gchat scenario that never signed in has been using."
+   gchat scenario that never signed in has been using. Every login belongs to
+   an organization, so without one there is no store to read (isaac-okfj)."
   [id]
-  (or (when-let [tokens (with-feature-fs
-                          (fn []
-                            (auth-store/load-tokens (or (root-dir) "target/test-state")
-                                                    (tenants/auth-provider id)
-                                                    (feature-fs))))]
+  (or (when-let [tokens (when id
+                          (with-feature-fs
+                            (fn []
+                              (auth-store/load-tokens (or (root-dir) "target/test-state")
+                                                      (tenants/auth-provider id)
+                                                      (feature-fs)))))]
         (or (:access tokens) (:access_token tokens)))
       "at-1"))
 
@@ -193,7 +195,7 @@
   "Stands in for isaac.google.token/token so a scenario need not refresh, and
    answers per organization so which one the comm asked for is visible."
   ([] (stub-google-token nil))
-  ([id] (stored-access-token (or id tenants/DEFAULT))))
+  ([id] (stored-access-token id)))
 
 (defn gchat-comm-registered
   "Register one configured Chat comm by name as the comm under test."
