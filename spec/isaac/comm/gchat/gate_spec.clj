@@ -64,11 +64,6 @@
       (should= :drop (:action result))
       (should= :self (:reason result))))
 
-  (it "drops an unconfigured space"
-    (let [result (sut/decide cfg (message :name "spaces/RANDOM/messages/1"))]
-      (should= :drop (:action result))
-      (should= :space (:reason result))))
-
   (it "admits a human sender Google reports as users/<id> with no email, when the allow-list names the id"
     (let [human (-> (message) (assoc :sender {:name "users/118285940969606191299" :displayName "Micah Martin" :type "HUMAN" :domainId "0ivzlyj"}))
           cfg'  (assoc cfg :gchat/allow-from ["users/118285940969606191299"])]
@@ -108,42 +103,39 @@
       (should= :drop (:action result))
       (should= :sender (:reason result))))
 
-  (context "a space nobody listed (isaac-xy2i)"
+  (context "a space nobody listed (isaac-ihuc)"
 
-    (it "routes it when the account discovers its own spaces"
-      (let [cfg'   (assoc cfg :gchat/discover true)
-            result (sut/decide cfg' (message :name "spaces/AAQA7rg5Uyc/messages/1")
+    (it "routes it — belonging to the space is the grant"
+      (let [result (sut/decide cfg (message :name "spaces/AAQA7rg5Uyc/messages/1")
                                {:space-info {:displayName "Yopp Test" :spaceType "SPACE"}})]
         (should= :route (:action result))
         (should= "gchat-yopp-test" (:session-key result))
         (should= #{:space:AAQA7rg5Uyc} (:tags result))))
 
     (it "names a DM for the member who spoke"
-      (let [cfg'   (assoc cfg :gchat/discover true)
-            result (sut/decide cfg' (-> (message :name "spaces/DM1/messages/1" :mention nil)
-                                        (assoc :sender {:email "ada@tonotop.com"
-                                                        :displayName "Micah Martin"}))
+      (let [result (sut/decide cfg (-> (message :name "spaces/DM1/messages/1" :mention nil)
+                                       (assoc :sender {:email "ada@tonotop.com"
+                                                       :displayName "Micah Martin"}))
                                {:space-info {:spaceType "DIRECT_MESSAGE"}})]
         (should= :route (:action result))
         (should= "gchat-dm-micah-martin" (:session-key result))))
 
     (it "always carries the organization, so a session says whose space it is"
-      (let [cfg'   (assoc cfg :gchat/discover true)
-            result (sut/decide cfg' (message :name "spaces/AAQA7rg5Uyc/messages/1")
+      (let [result (sut/decide cfg (message :name "spaces/AAQA7rg5Uyc/messages/1")
                                {:tenant :tonotop
                                 :space-info {:displayName "Yopp Test"}})]
         (should= "gchat-tonotop-yopp-test" (:session-key result))))
 
     (it "an entry that pins a session keeps it, and does not claim the space tag"
-      (let [cfg'   (-> cfg
-                       (assoc :gchat/discover true)
-                       (assoc-in [:gchat/spaces :spaces/ENG :session] "deploy-desk"))
+      (let [cfg'   (assoc-in cfg [:gchat/spaces :spaces/ENG :session] "deploy-desk")
             result (sut/decide cfg' (message))]
         (should= "deploy-desk" (:session-key result))
         (should-be-nil (:tags result))))
 
-    (it "still fails closed on an unlisted space when nothing discovers"
-      (should= :space (:reason (sut/decide cfg (message :name "spaces/RANDOM/messages/1"))))))
+    (it "an unknown sender is still refused, wherever they speak"
+      (let [stranger (-> (message :name "spaces/RANDOM/messages/1")
+                         (assoc :sender {:name "users/999" :domainId "0xother"}))]
+        (should= :sender (:reason (sut/decide cfg stranger))))))
 
   (context "resolving who spoke"
 

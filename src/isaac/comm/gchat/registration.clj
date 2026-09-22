@@ -1,24 +1,39 @@
 (ns isaac.comm.gchat.registration
-  "Chat contribution to :isaac.google/registration — one pointer subscription per space.
+  "Chat contribution to :isaac.google/registration — one pointer subscription
+   per organization, on every space at once.
 
-   A reconcile pass runs once per Google organization with `tenants/*tenant*`
-   bound, so both halves of this contribution answer for that organization
-   alone: the keys are its spaces, and they subscribe to its topic
-   (isaac-1zkz). With `gchat/discover` the keys are the spaces the account is
-   a member of, not the ones somebody listed (isaac-xy2i)."
+   Workspace Events takes `//chat.googleapis.com/spaces/-`, \"all spaces for a
+   user\": under the account's own token it delivers every space the account
+   belongs to, named spaces, unnamed group chats and DMs alike, and keeps
+   doing so as it is invited to more. So a reconcile pass has exactly one key
+   to answer with, and `gchat/spaces` entries subscribe nothing — belonging to
+   a space is the grant, and an entry only says what its session is called and
+   when it answers (isaac-ihuc).
+
+   A pass runs once per Google organization with `tenants/*tenant*` bound, so
+   the subscription it creates uses that organization's token and its topic
+   (isaac-1zkz)."
   (:require
-    [isaac.comm.gchat.spaces :as spaces]
-    [isaac.comm.gchat.tenant :as tenant]
     [isaac.config.loader :as loader]
     [isaac.config.root :as root]
     [isaac.fs :as fs]
     [isaac.google.tenants :as tenants]
     [isaac.nexus :as nexus]))
 
+(def KEY
+  "The one Chat subscription an organization needs."
+  "spaces/-")
+
 (def EVENT-TYPES
+  "What the one subscription carries: what was said, and who came and went.
+   Membership events are what tell the comm a space it has never heard from
+   exists at all — a DM's first message arrives with them."
   ["google.workspace.chat.message.v1.created"
    "google.workspace.chat.message.v1.updated"
-   "google.workspace.chat.message.v1.deleted"])
+   "google.workspace.chat.message.v1.deleted"
+   "google.workspace.chat.membership.v1.created"
+   "google.workspace.chat.membership.v1.updated"
+   "google.workspace.chat.membership.v1.deleted"])
 
 (defn- feature-fs []
   (or (fs/instance) (nexus/get :fs) (fs/real-fs)))
@@ -34,25 +49,13 @@
                    {}))]
     cfg))
 
-(defn- space-name [k]
-  (cond
-    (keyword? k) (if (namespace k)
-                   (str (namespace k) "/" (name k))
-                   (name k))
-    :else (str k)))
-
-(defn space-keys
-  "The Chat space resource names (spaces/ENG) this reconcile pass subscribes
-   for its organization: every space the account belongs to when it discovers,
-   plus whatever config names outright. A space the account has left drops out
-   of the listing and out of these keys, and the pass unsubscribes it."
+(defn subscription-keys
+  "What this reconcile pass subscribes for its organization: `spaces/-`, and
+   nothing else. Configured `gchat/spaces` entries are overrides on an
+   existing space's session, not subscriptions, and a space nobody listed is
+   still heard because the account belongs to it."
   []
-  (let [cfg        (full-cfg)
-        id         (tenants/resolve-id cfg nil)
-        configured (map space-name (tenant/spaces-for cfg id))
-        found      (when (tenant/discovering? cfg id)
-                     (keep :name (spaces/discovered id (tenant/discover-every-ms cfg id))))]
-    (vec (sort (distinct (concat configured found))))))
+  [KEY])
 
 (defn expiry [sub]
   (or (:expireTime sub) (:expires-at sub)))

@@ -7,8 +7,8 @@
     [isaac.comm.gchat.canon :as canon]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.gate :as gate]
+    [isaac.comm.gchat.lookup :as lookup]
     [isaac.comm.gchat.self :as self]
-    [isaac.comm.gchat.spaces :as spaces]
     [isaac.comm.gchat.transcript :as transcript]
     [isaac.comm.registry :as comm-registry]
     [isaac.config.loader :as loader]
@@ -151,28 +151,53 @@
     (session-store/list-sessions (session-store/registered-store))
     (catch Exception _ [])))
 
+(defn -rename-session!
+  "Rename a session in the store. Its own seam so naming can be exercised
+   without a store."
+  [old-name new-name]
+  (when-let [store (try (session-store/registered-store) (catch Exception _ nil))]
+    (session-store/rename-session! store old-name new-name)))
+
+(defn- rename-to!
+  "Follow the space's new name, and answer which session to speak on. A rename
+   the store refuses (a turn still in flight, say) is cosmetic: the session
+   keeps the name it has and the message still lands there rather than
+   starting a second conversation."
+  [decision from to]
+  (try
+    (-rename-session! from to)
+    (log/info :gchat/session-renamed :space (:space decision) :from from :to to)
+    to
+    (catch Exception e
+      (log/warn :gchat/session-rename-failed :from from :to to :error (.getMessage e))
+      from)))
+
 (defn- settle-session
   "The canonical session this space speaks on, once the store has had its say:
-   the one already carrying the space tag, whatever it is called now, else the
-   name the gate chose — with the space id appended when another space got
-   that name first (isaac-xy2i)."
+   the one already carrying the space tag — renamed when Chat's name for the
+   space has moved on — else the name the gate chose, with the space id
+   appended when another space got that name first (isaac-xy2i, isaac-ihuc)."
   [decision]
   (if (get (:space-cfg decision) :session)
     decision
-    (assoc decision :session-key (canon/session-for decision (-sessions)))))
+    (let [{:keys [session-key rename-from]} (canon/settle decision (-sessions))]
+      (assoc decision :session-key
+             (if rename-from
+               (rename-to! decision rename-from session-key)
+               session-key)))))
 
 (defn- decide-opts
   "What the gate cannot work out for itself: who spoke, which organization this
    comm speaks for — so self is never matched against another tenant's learned
    id (isaac-mm7o) and the session name says whose space it is — and what Chat
-   says the space is when the account discovers its own."
-  [full slice space]
+   calls the space, asked once per space and corrected by any newer name the
+   event itself carries (isaac-ihuc)."
+  [full slice message]
   (let [id (tenants/of-comm full slice)]
-    (cond-> {:resolve-person people/resolve
-             :account-user   (self/resolve-account-user id slice)
-             :tenant         id}
-      (:gchat/discover slice)
-      (assoc :space-info (spaces/known id (spaces/every-ms slice) space)))))
+    {:resolve-person people/resolve
+     :account-user   (self/resolve-account-user id slice)
+     :tenant         id
+     :space-info     (lookup/space-info id (gate/space-of message) (:space message))}))
 
 (defn- live-comm [cfg]
   (or (comm-registry/comm-for "gchat")
@@ -244,7 +269,7 @@
         (let [message  (chat-api/get-message! name)
               slice    (-load-cfg)
               decision (gate/decide slice message
-                                    (decide-opts (full-config) slice (gate/space-of message)))]
+                                    (decide-opts (full-config) slice message))]
           (cond
             (= :log (:action decision))
             (do
@@ -268,3 +293,15 @@
                         :session session-key))))
         (catch Exception e
           (log/error :gchat/fetch-failed :message name :error (.getMessage e)))))))
+
+(defn acknowledge-event
+  "Contributed :isaac.google/handler for the events the one `spaces/-`
+   subscription carries that start no turn: a deleted message, and the
+   account's own comings and goings. They are heard so the record is drained
+   rather than left pending forever.
+
+   A membership deleted for the account needs nothing done: there is no
+   per-space subscription to drop, and the session stays exactly as it is so
+   its history is still there if the account is invited back (isaac-ihuc)."
+  [event]
+  (log/debug :gchat/event-noted :type (:type event) :space (get-in event [:data :space])))

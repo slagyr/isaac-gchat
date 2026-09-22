@@ -60,6 +60,18 @@
       (throw (ex-info (str "Chat API get failed: " (:status resp))
                       {:status (:status resp) :body (:body resp) :name name})))))
 
+(defn get-space!
+  "GET spaces.get — what Chat calls a space and what kind it is. Throws on
+   non-2xx so the caller can decide what an unanswerable space is worth."
+  [token space]
+  (let [resp (-http! {:method  "GET"
+                      :url     (str chat-base "/" space)
+                      :headers {"Authorization" (str "Bearer " token)}})]
+    (if (<= 200 (:status resp) 299)
+      (:body resp)
+      (throw (ex-info (str "Chat API spaces.get failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :space space})))))
+
 (defn create-message!
   "POST spaces.messages.create. When :thread is set, reply in that thread."
   [{:keys [space thread text token]}]

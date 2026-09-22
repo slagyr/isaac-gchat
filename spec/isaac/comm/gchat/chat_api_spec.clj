@@ -38,6 +38,21 @@
     (with-redefs [sut/-http! (fn [_] {:status 404 :body {}})]
       (should-be-nil (sut/find-direct-message! "bob@tonotop.com" "at-1"))))
 
+  (it "asks Chat what one space is"
+    (let [captured (atom nil)]
+      (with-redefs [sut/-http!
+                    (fn [req]
+                      (reset! captured req)
+                      {:status 200 :body {:name "spaces/AAQA7rg5Uyc" :displayName "Yopp Test"}})]
+        (should= "Yopp Test" (:displayName (sut/get-space! "at-1" "spaces/AAQA7rg5Uyc")))
+        (should= "GET" (:method @captured))
+        (should= "https://chat.googleapis.com/v1/spaces/AAQA7rg5Uyc" (:url @captured))
+        (should= "Bearer at-1" (get-in @captured [:headers "Authorization"])))))
+
+  (it "throws when Chat refuses a spaces.get"
+    (with-redefs [sut/-http! (fn [_] {:status 403 :body {}})]
+      (should-throw (sut/get-space! "at-1" "spaces/AAQA7rg5Uyc"))))
+
   (it "creates a DM space via spaces:setup"
     (let [captured (atom nil)]
       (with-redefs [sut/-http!

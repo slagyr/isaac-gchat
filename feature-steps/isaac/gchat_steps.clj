@@ -10,8 +10,8 @@
     [isaac.comm.gchat :as gchat]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.handler :as handler]
+    [isaac.comm.gchat.lookup :as gchat-lookup]
     [isaac.comm.gchat.self :as gchat-self]
-    [isaac.comm.gchat.spaces :as gchat-spaces]
     [isaac.comm.protocol :as comm]
     [isaac.comm.registry :as comm-registry]
     [isaac.config.api :as config]
@@ -37,10 +37,10 @@
   (fn []
     (alter-var-root #'discovery/*foundation-index-override* (constantly nil))
     (restore-chat-http!)
-    (gchat-spaces/forget-known!)
+    (gchat-lookup/forget!)
     (g/dissoc! :gchat-comm)
     (g/dissoc! :gchat-http-stub)
-    (g/dissoc! :gchat-account-spaces)
+    (g/dissoc! :gchat-known-spaces)
     ;; the people memo and its warn-once marks outlive a scenario otherwise
     (people/reset-memo!)
     ;; likewise the per-tenant self cache - otherwise a later scenario could
@@ -166,14 +166,16 @@
   (some-> (get-in req [:headers "Authorization"])
           (str/replace #"^Bearer " "")))
 
+(defn- space-of-url
+  "spaces/AAQA7rg5Uyc of https://chat.googleapis.com/v1/spaces/AAQA7rg5Uyc."
+  [url]
+  (second (re-find #"/v1/(spaces/[^/?]+)" (str url))))
+
 (defn- stub-http! [req]
   (let [req' (record-http! req)
         stub (g/get :gchat-http-stub)
         url  (:url req')]
     (cond
-      (= url "https://chat.googleapis.com/v1/spaces")
-      {:status 200 :body {:spaces (or (g/get :gchat-account-spaces) [])}}
-
       (and stub (= url "https://chat.googleapis.com/v1/spaces:findDirectMessage")
            (:no-dm stub))
       {:status 404 :body {}}
@@ -188,6 +190,11 @@
       ;; stubbed sends learn a distinct users/<id> (isaac-mm7o).
       {:status 200 :body {:name   (str (:url req') "/posted")
                           :sender {:name (str "users/self-" (bearer-token req'))}}}
+
+      ;; spaces.get: what Chat calls one space. A space no scenario named is
+      ;; one Chat has not named either - the comm falls back to its id.
+      (str/starts-with? (str url) "https://chat.googleapis.com/v1/spaces/")
+      {:status 200 :body (get (g/get :gchat-known-spaces) (space-of-url url) {})}
 
       :else
       {:status 200 :body {}})))
@@ -208,15 +215,13 @@
     (alter-var-root #'chat-api/-http! (constantly original))
     (reset! real-chat-http* nil)))
 
-(defn chat-api-lists-spaces
-  "What spaces.list answers for the rest of this scenario: the spaces the
-   account is a member of, as Chat reports them."
-  [table]
+(defn chat-api-knows-space
+  "What spaces.get answers for one space for the rest of this scenario - its
+   display name, its type - as Chat reports them."
+  [space table]
   (own-chat-http!)
-  (gchat-spaces/forget-known!)
-  (g/assoc! :gchat-account-spaces
-            (mapv (fn [row] (zipmap (map keyword (:headers table)) row))
-                  (:rows table))))
+  (gchat-lookup/forget!)
+  (g/update! :gchat-known-spaces (fnil assoc {}) space (nest-dotted (table-map table))))
 
 (defn outbound-http-count
   "How many requests this scenario made to one URL, whatever their query."
@@ -355,8 +360,8 @@
 (defgiven #"the Chat API returns message \"([^\"]+)\":"
   isaac.gchat-steps/chat-api-returns)
 
-(defgiven "the Chat API lists the account's spaces:"
-  isaac.gchat-steps/chat-api-lists-spaces)
+(defgiven #"the Chat API knows space \"([^\"]+)\":"
+  isaac.gchat-steps/chat-api-knows-space)
 
 (defthen #"session \"([^\"]+)\" is tagged \"([^\"]+)\""
   isaac.gchat-steps/session-is-tagged)

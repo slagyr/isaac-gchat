@@ -1,9 +1,10 @@
 Feature: Google Chat across several Google organizations
   One Isaac can carry several Google organizations (isaac-1zkz). A Chat comm
   names the one it speaks for with `gchat/google`: it posts as that organization's
-  Google user, with that organization's token, and its spaces subscribe to
-  that organization's own topic in that organization's project. A host with
-  one organization names none and nothing about it changes. Bean: isaac-1zkz.
+  Google user, with that organization's token, and its one spaces/-
+  subscription rides that organization's own topic in that organization's
+  project. A host with one organization names none and nothing about it
+  changes. Beans: isaac-1zkz, isaac-ihuc.
 
   Background:
     Given default Grover setup in "/test/gchat-tenants"
@@ -44,23 +45,23 @@ Feature: Google Chat across several Google organizations
       | headers.Authorization | Bearer at-tonotop |
       | body.text             | All clear.        |
 
-  Scenario: each comm's spaces subscribe to its own organization's topic
+  Scenario: each organization gets its own spaces/- subscription on its own topic
     Given the Workspace Events API has no subscriptions
     And the Workspace Events API grants subscriptions expiring at "2026-09-25T12:00:00Z"
     When the google registration timer ticks
     Then an outbound HTTP request to "https://workspaceevents.googleapis.com/v1/subscriptions" matches:
-      | #index                                | 0                                 |
-      | method                                | POST                              |
-      | headers.Authorization                 | Bearer at-acme                    |
-      | body.targetResource                   | //chat.googleapis.com/spaces/ACME |
-      | body.notificationEndpoint.pubsubTopic | projects/acme-prod/topics/isaac   |
+      | #index                                | 0                               |
+      | method                                | POST                            |
+      | headers.Authorization                 | Bearer at-acme                  |
+      | body.targetResource                   | //chat.googleapis.com/spaces/-  |
+      | body.notificationEndpoint.pubsubTopic | projects/acme-prod/topics/isaac |
     And an outbound HTTP request to "https://workspaceevents.googleapis.com/v1/subscriptions" matches:
-      | #index                                | 1                                |
-      | method                                | POST                             |
-      | headers.Authorization                 | Bearer at-tonotop                |
-      | body.targetResource                   | //chat.googleapis.com/spaces/ENG |
-      | body.notificationEndpoint.pubsubTopic | projects/marigold/topics/isaac   |
+      | #index                                | 1                              |
+      | method                                | POST                           |
+      | headers.Authorization                 | Bearer at-tonotop              |
+      | body.targetResource                   | //chat.googleapis.com/spaces/- |
+      | body.notificationEndpoint.pubsubTopic | projects/marigold/topics/isaac |
+    And 2 outbound HTTP requests to "https://workspaceevents.googleapis.com/v1/subscriptions" were made
     And the log has entries matching:
-      | level | event              | key         |
-      | :info | :google/registered | spaces/ACME |
-      | :info | :google/registered | spaces/ENG  |
+      | level | event              | key      |
+      | :info | :google/registered | spaces/- |

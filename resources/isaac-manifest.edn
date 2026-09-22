@@ -15,10 +15,6 @@
                          :gchat/allow-from  {:type        :seq
                                              :spec        {:type :string}
                                              :description "Inbound allowlist of senders: an email, *@domain for every address in a domain, a users/<id> resource name, or domain:<domainId> (the Workspace customer id Chat reports as sender.domainId). Chat's message API does not return emails for human senders under user auth, so users/… or domain:… is usually what you want. Missing or empty = fail-closed; a drop logs the sender's identity so it can be copied in."}
-                         :gchat/discover    {:type        :boolean
-                                             :description "Let the account's own membership be the list: on every registration tick spaces.list (SPACE and DIRECT_MESSAGE) names the spaces this account belongs to, each one is subscribed, and each routes to its canonical session with no entry at all. Inviting the account to a space grants it ingest; removing it takes that back on the next tick. Entries under gchat/spaces remain overrides."}
-                         :gchat/discover-every-ms {:type   :int
-                                             :description "How long a spaces.list answer stands before discovery asks Chat again, in milliseconds. The registration timer ticks every 30s; membership does not change that often. Default 300000 (5 minutes)."}
                          :gchat/message-cap {:type        :int
                                              :description "Chunk reply text above this character count. Chat's limit is 4096; default 4096."}
                          :gchat/spaces      {:type        :map
@@ -45,7 +41,7 @@
                                                                     :respond      {:type        :keyword
                                                                                    :validations [[:one-of? :mentions :all :never]]
                                                                                    :description "When to start a turn: mentions (default), all, or never."}}}
-                                             :description "Chat spaces configured by hand: overrides on top of what gchat/discover finds. Without discovery these are the only spaces heard, and an unlisted space fails closed."}}
+                                             :description "Chat spaces configured by hand: overrides only. One subscription on spaces/- hears every space the account belongs to, so an entry subscribes nothing and an unlisted space is still heard - membership is the grant. An entry says what a space's session is called, which crew it runs on, and when it answers."}}
           :send-schema  {:gchat/space  {:type        :string
                                         :description "Chat space: configured :name or resource name (spaces/…)."}
                          :gchat/to     {:type        :string
@@ -62,14 +58,18 @@
   :gchat__send    {:factory isaac.comm.gchat.tools/send-tool-factory}}
 
  :isaac.google/handler
- {"google.workspace.chat.message.v1.created" isaac.comm.gchat.handler/handle-event
-  "google.workspace.chat.message.v1.updated" isaac.comm.gchat.handler/handle-event}
+ {"google.workspace.chat.message.v1.created"    isaac.comm.gchat.handler/handle-event
+  "google.workspace.chat.message.v1.updated"    isaac.comm.gchat.handler/handle-event
+  "google.workspace.chat.message.v1.deleted"    isaac.comm.gchat.handler/acknowledge-event
+  "google.workspace.chat.membership.v1.created" isaac.comm.gchat.handler/acknowledge-event
+  "google.workspace.chat.membership.v1.updated" isaac.comm.gchat.handler/acknowledge-event
+  "google.workspace.chat.membership.v1.deleted" isaac.comm.gchat.handler/acknowledge-event}
 
  :isaac.google/registration
  {:chat {:create! isaac.comm.gchat.registration/create!
          :renew!  isaac.comm.gchat.registration/renew!
          :expiry  isaac.comm.gchat.registration/expiry
-         :key     isaac.comm.gchat.registration/space-keys}}
+         :key     isaac.comm.gchat.registration/subscription-keys}}
 
  :isaac.google/scopes
  ["https://www.googleapis.com/auth/chat.messages"

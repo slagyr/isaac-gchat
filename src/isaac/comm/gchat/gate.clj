@@ -6,10 +6,12 @@
    it — or when it fails — an allow-list still matches users/<id> or
    domain:<domainId>.
 
-   The gate is also where a space with no config gets its session: with
-   `gchat/discover` on, belonging to the space is the grant, and the space
-   routes to its canonical session (isaac.comm.gchat.canon). The caller may
-   pass what Chat said the space is as `:space-info` and the organization as
+   The gate is also where a space gets its session. Belonging to the space is
+   the grant — the account was invited, and one subscription on `spaces/-`
+   hears every space it belongs to — so any space routes to its canonical
+   session (isaac.comm.gchat.canon) and `gchat/spaces` entries only override
+   what that session is called and when it answers (isaac-ihuc). The caller
+   passes what Chat said the space is as `:space-info` and the organization as
    `:tenant`; the gate itself asks Google nothing about spaces."
   (:require
     [clojure.string :as str]
@@ -185,12 +187,6 @@
 
         (not (allowed-sender? cfg identity))
         {:action :drop :reason :sender :sender identity}
-
-        ;; Belonging to the space is the grant when discovery is on: the
-        ;; account was invited, and that is what lets the space be heard
-        ;; (isaac-xy2i). Without it an unlisted space still fails closed.
-        (and (not direct?) (nil? entry) (not (:gchat/discover cfg)))
-        {:action :drop :reason :space}
 
         :else
         (let [policy (policy-kw (respond-policy entry direct?))]

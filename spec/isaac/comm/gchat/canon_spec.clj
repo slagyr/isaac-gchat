@@ -36,27 +36,41 @@
                                   :display-name "Yopp Test"
                                   :tenant       :tonotop})))
 
-  (context "choosing the session"
+  (context "settling the session"
 
-    (it "the session already tagged with this space wins, whatever it is called now"
-      (should= "gchat-yopp-test"
-               (sut/session-for {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-renamed"}
-                                [{:id "gchat-yopp-test" :name "gchat-yopp-test"
-                                  :tags #{:space:AAQA7rg5Uyc}}])))
+    (it "the session already tagged with this space is the one, and follows the new name"
+      (should= {:session-key "gchat-yopp-lab" :rename-from "gchat-yopp-test"}
+               (sut/settle {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-yopp-lab"}
+                           [{:id "gchat-yopp-test" :name "gchat-yopp-test"
+                             :tags #{:space:AAQA7rg5Uyc}}])))
+
+    (it "a name that has not moved renames nothing"
+      (should= {:session-key "gchat-yopp-test"}
+               (sut/settle {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-yopp-test"}
+                           [{:id "gchat-yopp-test" :name "gchat-yopp-test"
+                             :tags #{:space:AAQA7rg5Uyc}}])))
 
     (it "an untagged session of the same name is this space's — nothing else claims it"
-      (should= "gchat-yopp-test"
-               (sut/session-for {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-yopp-test"}
-                                [{:id "gchat-yopp-test" :name "gchat-yopp-test" :tags #{}}])))
+      (should= {:session-key "gchat-yopp-test"}
+               (sut/settle {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-yopp-test"}
+                           [{:id "gchat-yopp-test" :name "gchat-yopp-test" :tags #{}}])))
 
     (it "two spaces sharing a display name get distinct sessions"
-      (should= "gchat-yopp-test-aaqa7rg5uyc"
-               (sut/session-for {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-yopp-test"}
-                                [{:id "gchat-yopp-test" :name "gchat-yopp-test"
-                                  :tags #{:space:BBBB2222}}])))
+      (should= {:session-key "gchat-yopp-test-aaqa7rg5uyc"}
+               (sut/settle {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-yopp-test"}
+                           [{:id "gchat-yopp-test" :name "gchat-yopp-test"
+                             :tags #{:space:BBBB2222}}])))
+
+    (it "a rename onto a name another space holds takes the space id with it"
+      (should= {:session-key "gchat-yopp-test-aaqa7rg5uyc" :rename-from "gchat-yopp-lab"}
+               (sut/settle {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-yopp-test"}
+                           [{:id "gchat-yopp-lab" :name "gchat-yopp-lab"
+                             :tags #{:space:AAQA7rg5Uyc}}
+                            {:id "gchat-yopp-test" :name "gchat-yopp-test"
+                             :tags #{:space:BBBB2222}}])))
 
     (it "an unknown space keeps the name it was given"
-      (should= "gchat-yopp-test"
-               (sut/session-for {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-yopp-test"} [])))
+      (should= {:session-key "gchat-yopp-test"}
+               (sut/settle {:space "spaces/AAQA7rg5Uyc" :session-key "gchat-yopp-test"} [])))
     )
   )
