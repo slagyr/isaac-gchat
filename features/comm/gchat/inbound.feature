@@ -311,3 +311,74 @@ Feature: Google Chat inbound gate
       | type    | message.role | message.content           |
       | message | user         | #".*look at the deploy.*" |
       | message | assistant    | On it.                    |
+
+  Scenario: Isaac's own reply pushed back with only users/<id> drops as self, not as sender (isaac-mm7o)
+    Chat pushes Isaac's own replies back as events, and under user auth the
+    sender carries users/<id> and no email. Matching self on the account email
+    alone cannot see them. On 2026-09-19 they were dropped as :sender instead —
+    the right outcome by luck, because the id was not in the allow-list. With a
+    domain allow-list they would have been let through, and Isaac would have
+    answered itself.
+    Given config:
+      | comms.gchat.gchat/account-id | users/101936183306307394083            |
+      | comms.gchat.gchat/allow-from | ["domain:tonotop.com", "ada@tonotop.com"] |
+    And the Chat API returns message "spaces/ENG/messages/9":
+      | sender.name         | users/101936183306307394083 |
+      | sender.domainId     | tonotop.com                 |
+      | thread.name         | spaces/ENG/threads/T1       |
+      | text                | On it.                      |
+      | annotations.mention | users/yopp                  |
+    When Google Chat delivers a message event for "spaces/ENG/messages/9"
+    Then the session count is 0
+    And grover records zero provider requests
+    And the log has entries matching:
+      | level  | event                  | reason |
+      | :debug | :gchat/message-dropped | :self  |
+
+  Scenario: two tenants each learn their own id; one's echo is never mistaken for the other's (isaac-mm7o)
+    A Chat comm speaks for exactly one Google organization (isaac-1zkz). Each
+    learns its own users/<id> from its own outbound sends, keyed by that
+    organization - an id learned for one organization must never drop a
+    message as self for another.
+    Given config:
+      | comms.gchat.gchat/google       | tonotop                |
+      | comms.gchat.gchat/allow-from   | ["domain:tonotop.com"] |
+      | comms.gchat-acme.type          | gchat                  |
+      | comms.gchat-acme.gchat/google  | acme                   |
+      | comms.gchat-acme.gchat/account | isaac@acme.example     |
+    And the google auth store for organization "tonotop" has access "at-tonotop" and refresh "rt-tonotop"
+    And the google auth store for organization "acme" has access "at-acme" and refresh "rt-acme"
+    And gchat comm "gchat" is registered
+    When gchat comm send! is invoked with:
+      | path        | value       |
+      | gchat/space | spaces/ENG  |
+      | content     | Tonotop ack |
+    Given gchat comm "gchat-acme" is registered
+    When gchat comm send! is invoked with:
+      | path        | value       |
+      | gchat/space | spaces/ACME |
+      | content     | Acme ack    |
+    And the Chat API returns message "spaces/ENG/messages/10":
+      | sender.name         | users/self-at-acme    |
+      | sender.domainId     | tonotop.com            |
+      | thread.name         | spaces/ENG/threads/T2  |
+      | text                | look at this           |
+      | annotations.mention | users/yopp             |
+    When Google Chat delivers a message event for "spaces/ENG/messages/10"
+    Then the session count is 1
+    And the log has entries matching:
+      | level | event                 | space      |
+      | :info | :gchat/message-routed | spaces/ENG |
+    Given config:
+      | comms.gchat.gchat/google | acme |
+    And the Chat API returns message "spaces/ENG/messages/11":
+      | sender.name         | users/self-at-acme   |
+      | sender.domainId     | tonotop.com          |
+      | thread.name         | spaces/ENG/threads/T2 |
+      | text                | echo                 |
+      | annotations.mention | users/yopp           |
+    When Google Chat delivers a message event for "spaces/ENG/messages/11"
+    Then the session count is 1
+    And the log has entries matching:
+      | level  | event                  | reason |
+      | :debug | :gchat/message-dropped | :self  |

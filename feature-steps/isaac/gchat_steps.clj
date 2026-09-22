@@ -10,6 +10,7 @@
     [isaac.comm.gchat :as gchat]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.handler :as handler]
+    [isaac.comm.gchat.self :as gchat-self]
     [isaac.comm.protocol :as comm]
     [isaac.comm.registry :as comm-registry]
     [isaac.config.api :as config]
@@ -35,7 +36,10 @@
     (g/dissoc! :gchat-comm)
     (g/dissoc! :gchat-http-stub)
     ;; the people memo and its warn-once marks outlive a scenario otherwise
-    (people/reset-memo!)))
+    (people/reset-memo!)
+    ;; likewise the per-tenant self cache - otherwise a later scenario could
+    ;; inherit an id an earlier one learned (isaac-mm7o)
+    (gchat-self/forget!)))
 
 (defn- kv-cells->map [cells]
   (when (and (seq cells) (even? (count cells)))
@@ -150,6 +154,12 @@
     (g/assoc! :outbound-http-request flat)
     req))
 
+(defn- bearer-token
+  "The token a stubbed send authenticated with, bare (no \"Bearer \")."
+  [req]
+  (some-> (get-in req [:headers "Authorization"])
+          (str/replace #"^Bearer " "")))
+
 (defn- stub-http! [req]
   (let [req' (record-http! req)
         stub (g/get :gchat-http-stub)
@@ -164,7 +174,11 @@
       {:status 200 :body {:name (:setup-space stub)}}
 
       (str/includes? (str url) "/messages")
-      {:status 200 :body {:name (str (:url req') "/posted")}}
+      ;; The sender on a created message is Isaac's own account - the token
+      ;; that authenticated the send stands in for it, so each organization's
+      ;; stubbed sends learn a distinct users/<id> (isaac-mm7o).
+      {:status 200 :body {:name   (str (:url req') "/posted")
+                          :sender {:name (str "users/self-" (bearer-token req'))}}}
 
       :else
       {:status 200 :body {}})))

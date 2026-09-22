@@ -5,6 +5,7 @@
     [clojure.string :as str]
     [isaac.comm.factory :as factory]
     [isaac.comm.gchat.chat-api :as chat-api]
+    [isaac.comm.gchat.self :as self]
     [isaac.comm.gchat.format :as fmt]
     [isaac.comm.gchat.target :as target]
     [isaac.comm.gchat.tenant :as tenant]
@@ -25,13 +26,19 @@
   ([] ((requiring-resolve 'isaac.google.token/token)))
   ([slice] ((requiring-resolve 'isaac.google.token/token) (tenant/of-comm slice))))
 
-(defn- post-chunks! [space thread text cap token]
+(defn- post-chunks! [space thread text cap token tenant]
   (let [chunks (fmt/split-content (fmt/->chat-text text) cap)]
     (doseq [chunk chunks]
-      (chat-api/create-message! {:space  space
-                                 :thread thread
-                                 :text   chunk
-                                 :token  token}))))
+      ;; The response's :sender is Isaac — the one free source of the account's
+      ;; users/<id>, which the gate needs to see its own replies. Keyed by
+      ;; tenant: a comm speaks for one organization (isaac-1zkz), and an id
+      ;; learned for one must never be mistaken for another's self (isaac-mm7o).
+      (self/learn-from-send!
+        tenant
+        (chat-api/create-message! {:space  space
+                                   :thread thread
+                                   :text   chunk
+                                   :token  token})))))
 
 (defn- resolve-dm-space! [email token]
   (or (:name (chat-api/find-direct-message! email token))
@@ -54,7 +61,7 @@
             {:ok false :transient? false})
 
         :else
-        (do (post-chunks! space thread text cap token)
+        (do (post-chunks! space thread text cap token (tenant/of-comm cfg))
             {:ok true})))
     (catch Exception e
       (log/error :gchat.send/failed :error (.getMessage e))
@@ -71,7 +78,7 @@
       (let [cfg   (slice comm)
             token (access-token cfg)
             cap   (or (:gchat/message-cap cfg) fmt/default-message-cap)]
-        (post-chunks! space thread text cap token)))))
+        (post-chunks! space thread text cap token (tenant/of-comm cfg))))))
 
 (defn- on-turn-end* [_comm session-key _result]
   (swap! origin-by-session dissoc session-key))
