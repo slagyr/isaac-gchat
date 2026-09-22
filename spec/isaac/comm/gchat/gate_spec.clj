@@ -40,7 +40,8 @@
       (should= :route (:action result))
       (should= "spaces/ENG" (:space result))
       (should= "spaces/ENG/threads/T1" (:thread result))
-      (should= "gchat-spaces-ENG" (:session-key result))))
+      (should= "gchat-spaces-eng" (:session-key result))
+      (should= #{:space:ENG} (:tags result))))
 
   (it "hears a space message with no mention but does not answer it"
     (let [result (sut/decide cfg (message :mention nil :text "lunch anyone?"))]
@@ -56,7 +57,7 @@
                                           :text "are you there?"
                                           :space-type "DIRECT_MESSAGE"))]
       (should= :route (:action result))
-      (should= "gchat-spaces-DM1" (:session-key result))))
+      (should= "gchat-spaces-dm1" (:session-key result))))
 
   (it "drops Isaac's own message"
     (let [result (sut/decide cfg (message :email account :text "On it."))]
@@ -107,8 +108,42 @@
       (should= :drop (:action result))
       (should= :sender (:reason result))))
 
-  (it "names the session by replacing slashes in the space name"
-    (should= "gchat-spaces-ENG" (sut/session-name "spaces/ENG")))
+  (context "a space nobody listed (isaac-xy2i)"
+
+    (it "routes it when the account discovers its own spaces"
+      (let [cfg'   (assoc cfg :gchat/discover true)
+            result (sut/decide cfg' (message :name "spaces/AAQA7rg5Uyc/messages/1")
+                               {:space-info {:displayName "Yopp Test" :spaceType "SPACE"}})]
+        (should= :route (:action result))
+        (should= "gchat-yopp-test" (:session-key result))
+        (should= #{:space:AAQA7rg5Uyc} (:tags result))))
+
+    (it "names a DM for the member who spoke"
+      (let [cfg'   (assoc cfg :gchat/discover true)
+            result (sut/decide cfg' (-> (message :name "spaces/DM1/messages/1" :mention nil)
+                                        (assoc :sender {:email "ada@tonotop.com"
+                                                        :displayName "Micah Martin"}))
+                               {:space-info {:spaceType "DIRECT_MESSAGE"}})]
+        (should= :route (:action result))
+        (should= "gchat-dm-micah-martin" (:session-key result))))
+
+    (it "always carries the organization, so a session says whose space it is"
+      (let [cfg'   (assoc cfg :gchat/discover true)
+            result (sut/decide cfg' (message :name "spaces/AAQA7rg5Uyc/messages/1")
+                               {:tenant :tonotop
+                                :space-info {:displayName "Yopp Test"}})]
+        (should= "gchat-tonotop-yopp-test" (:session-key result))))
+
+    (it "an entry that pins a session keeps it, and does not claim the space tag"
+      (let [cfg'   (-> cfg
+                       (assoc :gchat/discover true)
+                       (assoc-in [:gchat/spaces :spaces/ENG :session] "deploy-desk"))
+            result (sut/decide cfg' (message))]
+        (should= "deploy-desk" (:session-key result))
+        (should-be-nil (:tags result))))
+
+    (it "still fails closed on an unlisted space when nothing discovers"
+      (should= :space (:reason (sut/decide cfg (message :name "spaces/RANDOM/messages/1"))))))
 
   (context "resolving who spoke"
 

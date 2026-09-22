@@ -1,6 +1,8 @@
 (ns isaac.comm.gchat.registration-spec
   (:require
+    [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.registration :as sut]
+    [isaac.comm.gchat.spaces :as spaces]
     [isaac.config.loader :as loader]
     [isaac.google.events :as events]
     [isaac.google.tenants :as tenants]
@@ -10,6 +12,11 @@
   {:google {:tonotop {:topic "projects/marigold/topics/isaac"}}
    :comms  {:gchat {:gchat/spaces {:spaces/ENG  {:name "engineering"}
                                    :spaces/PROD {:name "product"}}}}})
+
+(def discovering
+  {:google {:tonotop {:topic "projects/marigold/topics/isaac"}}
+   :comms  {:gchat {:gchat/discover true
+                    :gchat/spaces   {:spaces/ENG {:name "engineering"}}}}})
 
 (def tenanted
   {:google {:tonotop {:project "marigold"  :topic "projects/marigold/topics/isaac"}
@@ -55,4 +62,34 @@
 
   (it "expiry reads expireTime from Google"
     (should= "2026-09-25T12:00:00Z" (sut/expiry {:expireTime "2026-09-25T12:00:00Z"})))
+
+  (context "discovery"
+
+    (before (spaces/forget-known!))
+
+    (it "keys are every space the account belongs to, configured or not"
+      (with-redefs [loader/snapshot    (fn [_] discovering)
+                    spaces/-token      (fn [_] "at-1")
+                    chat-api/list-spaces! (fn [& _] {:spaces [{:name "spaces/AAQA7rg5Uyc"
+                                                               :displayName "Yopp Test"}
+                                                              {:name "spaces/DM1"
+                                                               :spaceType "DIRECT_MESSAGE"}]})]
+        (should= ["spaces/AAQA7rg5Uyc" "spaces/DM1" "spaces/ENG"]
+                 (binding [tenants/*tenant* :tonotop] (sut/space-keys)))))
+
+    (it "a space the account left is no longer a key"
+      (with-redefs [loader/snapshot    (fn [_] discovering)
+                    spaces/-token      (fn [_] "at-1")
+                    chat-api/list-spaces! (fn [& _] {:spaces []})]
+        (should= ["spaces/ENG"]
+                 (binding [tenants/*tenant* :tonotop] (sut/space-keys)))))
+
+    (it "an organization that does not discover asks Chat nothing"
+      (let [asked (atom 0)]
+        (with-redefs [loader/snapshot    (fn [_] one-organization)
+                      spaces/-token      (fn [_] "at-1")
+                      chat-api/list-spaces! (fn [& _] (swap! asked inc) {:spaces []})]
+          (should= ["spaces/ENG" "spaces/PROD"] (sut/space-keys))
+          (should= 0 @asked))))
+    )
   )

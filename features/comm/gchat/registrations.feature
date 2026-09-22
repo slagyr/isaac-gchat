@@ -76,3 +76,62 @@ Feature: Google Chat registrations and renewal
     When the test clock advances 3600000 milliseconds
     And the google registration timer ticks
     Then 2 outbound HTTP requests to "https://workspaceevents.googleapis.com/v1/subscriptions" for "spaces/ENG" were made
+
+  Scenario: with discovery on, the first tick subscribes every space the account belongs to (isaac-xy2i)
+    Given config:
+      | comms.gchat.gchat/discover | true |
+    And the Chat API lists the account's spaces:
+      | name               | displayName | spaceType      |
+      | spaces/ENG         | Engineering | SPACE          |
+      | spaces/AAQA7rg5Uyc | Yopp Test   | SPACE          |
+      | spaces/DM1         |             | DIRECT_MESSAGE |
+    And the Workspace Events API has no subscriptions
+    And the Workspace Events API grants subscriptions expiring at "2026-09-25T12:00:00Z"
+    When the google registration timer ticks
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces" matches:
+      | method                | GET                                                 |
+      | headers.Authorization | Bearer at-1                                         |
+      | query.filter          | spaceType = "SPACE" OR spaceType = "DIRECT_MESSAGE" |
+    And the log has entries matching:
+      | level | event              | key                | expires-at           |
+      | :info | :google/registered | spaces/AAQA7rg5Uyc | 2026-09-25T12:00:00Z |
+      | :info | :google/registered | spaces/DM1         | 2026-09-25T12:00:00Z |
+      | :info | :google/registered | spaces/PROD        | 2026-09-25T12:00:00Z |
+
+  Scenario: a space the account has left is no longer listed and is unsubscribed (isaac-xy2i)
+    Given config:
+      | comms.gchat.gchat/discover | true |
+    And the Chat API lists the account's spaces:
+      | name       | displayName | spaceType |
+      | spaces/ENG | Engineering | SPACE     |
+    And the Workspace Events API has subscription "subscriptions/s-eng" for "spaces/ENG" expiring at "2026-09-24T12:00:00Z"
+    And the Workspace Events API has subscription "subscriptions/s-yopp" for "spaces/AAQA7rg5Uyc" expiring at "2026-09-24T12:00:00Z"
+    And the Workspace Events API grants subscriptions expiring at "2026-09-25T12:00:00Z"
+    When the google registration timer ticks
+    Then an outbound HTTP request to "https://workspaceevents.googleapis.com/v1/subscriptions/s-yopp" matches:
+      | method | DELETE |
+    And the log has entries matching:
+      | level | event                | key                |
+      | :info | :google/unregistered | spaces/AAQA7rg5Uyc |
+
+  Scenario: discovery asks Chat once per interval, however often the timer ticks (isaac-xy2i)
+    The registration timer ticks every 30 seconds and membership does not, so
+    a listing stands for gchat/discover-every-ms and every tick inside it is
+    answered from that listing — including the keys it subscribes, which must
+    not vanish and take their subscriptions with them.
+    Given config:
+      | comms.gchat.gchat/discover          | true   |
+      | comms.gchat.gchat/discover-every-ms | 300000 |
+    And the Chat API lists the account's spaces:
+      | name               | displayName | spaceType |
+      | spaces/AAQA7rg5Uyc | Yopp Test   | SPACE     |
+    And the Workspace Events API has no subscriptions
+    And the Workspace Events API grants subscriptions expiring at "2026-09-25T12:00:00Z"
+    When the google registration timer ticks
+    And the test clock advances 30000 milliseconds
+    And the google registration timer ticks
+    Then 1 outbound HTTP request to "https://chat.googleapis.com/v1/spaces" was made
+    And no outbound HTTP request to "https://workspaceevents.googleapis.com/v1/subscriptions/s-AAQA7rg5Uyc" was made
+    When the test clock advances 300000 milliseconds
+    And the google registration timer ticks
+    Then 2 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces" were made

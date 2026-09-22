@@ -3,9 +3,11 @@
 
    A reconcile pass runs once per Google organization with `tenants/*tenant*`
    bound, so both halves of this contribution answer for that organization
-   alone: the keys are its comms' spaces, and they subscribe to its topic
-   (isaac-1zkz)."
+   alone: the keys are its spaces, and they subscribe to its topic
+   (isaac-1zkz). With `gchat/discover` the keys are the spaces the account is
+   a member of, not the ones somebody listed (isaac-xy2i)."
   (:require
+    [isaac.comm.gchat.spaces :as spaces]
     [isaac.comm.gchat.tenant :as tenant]
     [isaac.config.loader :as loader]
     [isaac.config.root :as root]
@@ -40,11 +42,17 @@
     :else (str k)))
 
 (defn space-keys
-  "Configured Chat space resource names (spaces/ENG) of the organization this
-   reconcile pass is acting for."
+  "The Chat space resource names (spaces/ENG) this reconcile pass subscribes
+   for its organization: every space the account belongs to when it discovers,
+   plus whatever config names outright. A space the account has left drops out
+   of the listing and out of these keys, and the pass unsubscribes it."
   []
-  (let [cfg (full-cfg)]
-    (vec (sort (map space-name (tenant/spaces-for cfg (tenants/resolve-id cfg nil)))))))
+  (let [cfg        (full-cfg)
+        id         (tenants/resolve-id cfg nil)
+        configured (map space-name (tenant/spaces-for cfg id))
+        found      (when (tenant/discovering? cfg id)
+                     (keep :name (spaces/discovered id (tenant/discover-every-ms cfg id))))]
+    (vec (sort (distinct (concat configured found))))))
 
 (defn expiry [sub]
   (or (:expireTime sub) (:expires-at sub)))

@@ -4,22 +4,26 @@
    pass :resolve-person (isaac.google.people/resolve) to look the email up at
    decision time. The lookup is the only impure edge and it fails soft: without
    it — or when it fails — an allow-list still matches users/<id> or
-   domain:<domainId>."
+   domain:<domainId>.
+
+   The gate is also where a space with no config gets its session: with
+   `gchat/discover` on, belonging to the space is the grant, and the space
+   routes to its canonical session (isaac.comm.gchat.canon). The caller may
+   pass what Chat said the space is as `:space-info` and the organization as
+   `:tenant`; the gate itself asks Google nothing about spaces."
   (:require
     [clojure.string :as str]
+    [isaac.comm.gchat.canon :as canon]
     [isaac.google.people :as people]))
-
-(defn session-name
-  "Default session id for a Chat space: gchat-<space with / → ->."
-  [space]
-  (str "gchat-" (str/replace (str space) "/" "-")))
 
 (defn- sender-email [message]
   (or (get-in message [:sender :email])
       (get-in message [:senderEmail])
       (get message :sender.email)))
 
-(defn- space-name [message]
+(defn space-of
+  "Which space a fetched message belongs to."
+  [message]
   (or (get-in message [:space :name])
       (when-let [n (:name message)]
         (second (re-find #"(spaces/[^/]+)" (str n))))))
@@ -48,8 +52,12 @@
                                          (get-in ann [:userMention :user :name]))
         :else                        false))))
 
-(defn- dm? [message]
-  (= "DIRECT_MESSAGE" (str (space-type message))))
+(defn- dm?
+  "A direct message, by what the event said or by what Chat's listing says
+   the space is."
+  [message space-info]
+  (or (= "DIRECT_MESSAGE" (str (space-type message)))
+      (= "DIRECT_MESSAGE" (str (:spaceType space-info)))))
 
 (defn- allow-from [cfg]
   (let [v (:gchat/allow-from cfg)]
@@ -71,12 +79,11 @@
         (get spaces* space)
         (get spaces* (keyword (str "spaces/" (name (or space ""))))))))
 
-(defn- respond-policy [cfg message]
-  (if (dm? message)
-    (or (some-> (space-cfg cfg (space-name message)) :respond)
-        :all)
-    (or (some-> (space-cfg cfg (space-name message)) :respond)
-        :mentions)))
+(defn- respond-policy
+  "When this space starts a turn: what its entry says, else every message in a
+   DM and only mentions in a space."
+  [entry dm?]
+  (or (:respond entry) (if dm? :all :mentions)))
 
 (defn- policy-kw [policy]
   (keyword (or policy :mentions)))
@@ -158,15 +165,18 @@
    Pure but for the optional :resolve-person lookup in `opts`."
   ([cfg message] (decide cfg message {}))
   ([cfg message opts]
-    (let [identity (sender-identity message opts)
-          email  (:email identity)
-          space  (space-name message)
-          thread (thread-name message)
-          account (:gchat/account cfg)
+    (let [identity     (sender-identity message opts)
+          email        (:email identity)
+          space        (space-of message)
+          thread       (thread-name message)
+          account      (:gchat/account cfg)
           ;; Chat pushes Isaac's own replies back with users/<id> and no email,
           ;; so email alone cannot see self. Without this an operator who allows
           ;; domain:<id> gets an echo loop (isaac-mm7o).
-          account-user (or (:account-user opts) (:gchat/account-id cfg))]
+          account-user (or (:account-user opts) (:gchat/account-id cfg))
+          space-info   (:space-info opts)
+          direct?      (dm? message space-info)
+          entry        (space-cfg cfg space)]
       (cond
         (or (and (seq account) (= email account))
             (and (seq (str (or account-user "")))
@@ -176,11 +186,14 @@
         (not (allowed-sender? cfg identity))
         {:action :drop :reason :sender :sender identity}
 
-        (and (not (dm? message)) (nil? (space-cfg cfg space)))
+        ;; Belonging to the space is the grant when discovery is on: the
+        ;; account was invited, and that is what lets the space be heard
+        ;; (isaac-xy2i). Without it an unlisted space still fails closed.
+        (and (not direct?) (nil? entry) (not (:gchat/discover cfg)))
         {:action :drop :reason :space}
 
         :else
-        (let [policy (policy-kw (respond-policy cfg message))]
+        (let [policy (policy-kw (respond-policy entry direct?))]
           (cond
             (= :never policy)
             {:action :drop :reason :policy}
@@ -201,13 +214,22 @@
             {:action      :route
              :space       space
              :thread      thread
-             :session-key (or (get (space-cfg cfg space) :session)
-                              (session-name space))
-             :crew        (or (get (space-cfg cfg space) :crew)
+             :session-key (or (:session entry)
+                              (canon/canonical-name {:space        space
+                                                     :tenant       (:tenant opts)
+                                                     :display-name (:displayName space-info)
+                                                     :dm?          direct?
+                                                     :member       (:display-name identity)}))
+             ;; The space id, verbatim, on the session a rename must not
+             ;; orphan. An entry that pinned a session named it on purpose;
+             ;; that session is not this space's to claim.
+             :tags        (when-not (:session entry)
+                            (some-> (canon/space-tag space) hash-set))
+             :crew        (or (:crew entry)
                               (:crew cfg)
                               "main")
-             :space-cfg   (space-cfg cfg space)
-             :dm?         (dm? message)
+             :space-cfg   entry
+             :dm?         direct?
              :text        (or (:text message) "")
              :sender      (people/render identity)
              ;; Who spoke, structured: the rendered name is for the turn to

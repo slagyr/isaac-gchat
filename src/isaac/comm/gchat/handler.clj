@@ -4,16 +4,18 @@
     [clojure.string :as str]
     [isaac.api :as api]
     [isaac.comm.factory :as comm-factory]
+    [isaac.comm.gchat.canon :as canon]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.gate :as gate]
     [isaac.comm.gchat.self :as self]
-    [isaac.comm.gchat.tenant :as tenant]
+    [isaac.comm.gchat.spaces :as spaces]
     [isaac.comm.gchat.transcript :as transcript]
     [isaac.comm.registry :as comm-registry]
     [isaac.config.loader :as loader]
     [isaac.config.root :as root]
     [isaac.fs :as fs]
     [isaac.google.people :as people]
+    [isaac.google.tenants :as tenants]
     [isaac.logger :as log]
     [isaac.nexus :as nexus]
     [isaac.session.frequencies :as frequencies]
@@ -57,10 +59,16 @@
 (defn- ensure-session! [decision session-key]
   (or (api/get-session session-key)
       (api/create-session! session-key
-                           {:channel  "gchat"
-                            :chatType (if (:dm? decision) "direct" "space")
-                            :crew     (:crew decision)
-                            :origin   (origin decision)})))
+                           (cond-> {:channel  "gchat"
+                                    :chatType (if (:dm? decision) "direct" "space")
+                                    :crew     (:crew decision)
+                                    :origin   (origin decision)}
+                             ;; Only the space's own canonical session carries
+                             ;; its tag; a session an entry pinned belongs to
+                             ;; whoever pinned it.
+                             (and (seq (:tags decision))
+                                  (= session-key (:session-key decision)))
+                             (assoc :tags (:tags decision))))))
 
 (def FREQUENCY-KEYS
   "What a space entry may say about which session hears it — the agent's
@@ -121,7 +129,7 @@
           :else
           [(:session-key target)])))))
 
-(defn- full-config []
+(defn full-config []
   (try
     (let [root (or (nexus/get :root) (root/current-root))
           snap (loader/snapshot "gchat")
@@ -134,6 +142,37 @@
       cfg)
     (catch Exception _
       {})))
+
+(defn -sessions
+  "Every session the store holds. Its own seam so naming can be exercised
+   without a store."
+  []
+  (try
+    (session-store/list-sessions (session-store/registered-store))
+    (catch Exception _ [])))
+
+(defn- settle-session
+  "The canonical session this space speaks on, once the store has had its say:
+   the one already carrying the space tag, whatever it is called now, else the
+   name the gate chose — with the space id appended when another space got
+   that name first (isaac-xy2i)."
+  [decision]
+  (if (get (:space-cfg decision) :session)
+    decision
+    (assoc decision :session-key (canon/session-for decision (-sessions)))))
+
+(defn- decide-opts
+  "What the gate cannot work out for itself: who spoke, which organization this
+   comm speaks for — so self is never matched against another tenant's learned
+   id (isaac-mm7o) and the session name says whose space it is — and what Chat
+   says the space is when the account discovers its own."
+  [full slice space]
+  (let [id (tenants/of-comm full slice)]
+    (cond-> {:resolve-person people/resolve
+             :account-user   (self/resolve-account-user id slice)
+             :tenant         id}
+      (:gchat/discover slice)
+      (assoc :space-info (spaces/known id (spaces/every-ms slice) space)))))
 
 (defn- live-comm [cfg]
   (or (comm-registry/comm-for "gchat")
@@ -178,9 +217,10 @@
                    ch (assoc :comm ch))))
 
 (defn- dispatch! [decision]
-  (let [ch    (live-comm (-load-cfg))
-        input (framed-input decision)
-        keys* (session-keys decision)]
+  (let [decision (settle-session decision)
+        ch       (live-comm (-load-cfg))
+        input    (framed-input decision)
+        keys*    (session-keys decision)]
     (transcript/append! (:space decision) (transcript/entry decision))
     (doseq [session-key keys*]
       (ensure-session! decision session-key)
@@ -201,16 +241,10 @@
     (if-not name
       (log/error :gchat/fetch-failed :error "missing message name")
       (try
-        (let [cfg      (-load-cfg)
-              message  (chat-api/get-message! name)
-              decision (gate/decide cfg message
-                                    {:resolve-person people/resolve
-                                     ;; Which organization this comm speaks for
-                                     ;; (isaac-1zkz), so self is never matched
-                                     ;; against another tenant's learned id
-                                     ;; (isaac-mm7o).
-                                     :account-user   (self/resolve-account-user
-                                                       (tenant/of-comm cfg) cfg)})]
+        (let [message  (chat-api/get-message! name)
+              slice    (-load-cfg)
+              decision (gate/decide slice message
+                                    (decide-opts (full-config) slice (gate/space-of message)))]
           (cond
             (= :log (:action decision))
             (do

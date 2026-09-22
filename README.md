@@ -26,6 +26,23 @@ Depends on [isaac-foundation](https://github.com/slagyr/isaac-foundation) and
 - Inbound allowlist, space routing, and `POST` replies/sends on Chat's 4096 cap.
 - Further work is planned in the beans under isaac-bv1l.
 
+### Discovery (`gchat/discover`)
+
+With `gchat/discover true` the account's own membership is the list. Discovery
+asks Chat which spaces and DMs the account belongs to; each one is subscribed,
+and each routes to a canonical session — the Google organization, then the
+space's display name (`gchat-tonotop-yopp-test`) or the other member in a DM
+(`gchat-tonotop-dm-micah-martin`) — carrying the space id on a `space:<id>` tag
+so a rename never orphans it. **Inviting the account to a space is granting it
+ingest**, and removing the account takes that back on the next listing. Entries
+under `gchat/spaces` stay overrides; without discovery an unlisted space still
+fails closed.
+
+The registration timer ticks every 30 seconds and membership does not, so a
+listing stands for `gchat/discover-every-ms` (default 300000, five minutes) and
+every question in between — the timer's keys and the handler's session names
+alike — is answered from it.
+
 ## Development
 
 Sibling checkouts expected:

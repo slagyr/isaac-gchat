@@ -11,6 +11,7 @@
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.handler :as handler]
     [isaac.comm.gchat.self :as gchat-self]
+    [isaac.comm.gchat.spaces :as gchat-spaces]
     [isaac.comm.protocol :as comm]
     [isaac.comm.registry :as comm-registry]
     [isaac.config.api :as config]
@@ -30,11 +31,16 @@
 
 (helper! isaac.gchat-steps)
 
+(declare restore-chat-http!)
+
 (g/after-scenario
   (fn []
     (alter-var-root #'discovery/*foundation-index-override* (constantly nil))
+    (restore-chat-http!)
+    (gchat-spaces/forget-known!)
     (g/dissoc! :gchat-comm)
     (g/dissoc! :gchat-http-stub)
+    (g/dissoc! :gchat-account-spaces)
     ;; the people memo and its warn-once marks outlive a scenario otherwise
     (people/reset-memo!)
     ;; likewise the per-tenant self cache - otherwise a later scenario could
@@ -165,6 +171,9 @@
         stub (g/get :gchat-http-stub)
         url  (:url req')]
     (cond
+      (= url "https://chat.googleapis.com/v1/spaces")
+      {:status 200 :body {:spaces (or (g/get :gchat-account-spaces) [])}}
+
       (and stub (= url "https://chat.googleapis.com/v1/spaces:findDirectMessage")
            (:no-dm stub))
       {:status 404 :body {}}
@@ -182,6 +191,43 @@
 
       :else
       {:status 200 :body {}})))
+
+(defonce ^:private real-chat-http* (atom nil))
+
+(defn- own-chat-http!
+  "Take the Chat HTTP seam for the whole scenario. The registration timer
+   ticks in isaac-google's step, outside any with-redefs of ours, so a
+   scenario that stubs spaces.list has to hold the seam across steps."
+  []
+  (when-not @real-chat-http*
+    (reset! real-chat-http* chat-api/-http!)
+    (alter-var-root #'chat-api/-http! (constantly stub-http!))))
+
+(defn restore-chat-http! []
+  (when-let [original @real-chat-http*]
+    (alter-var-root #'chat-api/-http! (constantly original))
+    (reset! real-chat-http* nil)))
+
+(defn chat-api-lists-spaces
+  "What spaces.list answers for the rest of this scenario: the spaces the
+   account is a member of, as Chat reports them."
+  [table]
+  (own-chat-http!)
+  (gchat-spaces/forget-known!)
+  (g/assoc! :gchat-account-spaces
+            (mapv (fn [row] (zipmap (map keyword (:headers table)) row))
+                  (:rows table))))
+
+(defn outbound-http-count
+  "How many requests this scenario made to one URL, whatever their query."
+  [n url]
+  (let [n    (if (string? n) (parse-long n) n)
+        reqs (or (g/get :outbound-http-requests) [])]
+    (g/should= n (count (filter #(= url (:url %)) reqs)))))
+
+(defn session-is-tagged [key tag]
+  (let [session (api/get-session key)]
+    (g/should (contains? (set (:tags session)) (keyword tag)))))
 
 (defn chat-api-returns [name table]
   (let [msg (assoc (nest-dotted (table-map table)) :name name)]
@@ -308,6 +354,15 @@
 
 (defgiven #"the Chat API returns message \"([^\"]+)\":"
   isaac.gchat-steps/chat-api-returns)
+
+(defgiven "the Chat API lists the account's spaces:"
+  isaac.gchat-steps/chat-api-lists-spaces)
+
+(defthen #"session \"([^\"]+)\" is tagged \"([^\"]+)\""
+  isaac.gchat-steps/session-is-tagged)
+
+(defthen #"^(\d+) outbound HTTP requests? to \"([^\"]+)\" (?:was|were) made$"
+  isaac.gchat-steps/outbound-http-count)
 
 (defgiven "gchat outbound comm is registered"
   isaac.gchat-steps/gchat-outbound-comm-registered)

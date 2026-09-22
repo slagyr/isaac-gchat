@@ -31,4 +31,10 @@
 
   (it "an organization with no comm has no spaces"
     (should= [] (sut/spaces-for tenanted :nobody)))
+
+  (it "an organization discovers when one of its comms says so"
+    (let [discovering (assoc-in tenanted [:comms :gchat-acme :gchat/discover] true)]
+      (should= true (sut/discovering? discovering :acme))
+      (should= false (sut/discovering? discovering :tonotop))
+      (should= false (sut/discovering? tenanted :acme))))
   )

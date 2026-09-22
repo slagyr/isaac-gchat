@@ -382,3 +382,134 @@ Feature: Google Chat inbound gate
     And the log has entries matching:
       | level  | event                  | reason |
       | :debug | :gchat/message-dropped | :self  |
+
+  Scenario: a mention in a discovered space starts a turn on its canonical session (isaac-xy2i)
+    Given config:
+      | google.tonotop.topic       | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/discover | true                           |
+    And the Chat API lists the account's spaces:
+      | name               | displayName | spaceType |
+      | spaces/AAQA7rg5Uyc | Yopp Test   | SPACE     |
+    And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/1":
+      | sender.email        | ada@tonotop.com               |
+      | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
+      | text                | @Isaac are you there?         |
+      | annotations.mention | users/yopp                    |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Here.   |
+    When Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/1"
+    Then session "gchat-tonotop-yopp-test" has transcript matching:
+      | type    | message.role | message.content        |
+      | message | user         | #".*are you there\?.*" |
+      | message | assistant    | Here.                  |
+    And session "gchat-tonotop-yopp-test" is tagged "space:AAQA7rg5Uyc"
+
+  Scenario: renaming a discovered space keeps its session — the tag matches, the name may lag (isaac-xy2i)
+    Given config:
+      | google.tonotop.topic       | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/discover | true                           |
+    And the Chat API lists the account's spaces:
+      | name               | displayName | spaceType |
+      | spaces/AAQA7rg5Uyc | Yopp Test   | SPACE     |
+    And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/1":
+      | sender.email        | ada@tonotop.com               |
+      | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
+      | text                | @Isaac are you there?         |
+      | annotations.mention | users/yopp                    |
+    And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/2":
+      | sender.email        | ada@tonotop.com               |
+      | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
+      | text                | @Isaac still there?           |
+      | annotations.mention | users/yopp                    |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Here.   |
+      | echo  | text | Still.  |
+    When Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/1"
+    And the Chat API lists the account's spaces:
+      | name               | displayName | spaceType |
+      | spaces/AAQA7rg5Uyc | Yopp Lab    | SPACE     |
+    And Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/2"
+    Then the session count is 1
+    And session "gchat-tonotop-yopp-test" has transcript matching:
+      | type    | message.role | message.content       |
+      | message | user         | #".*are you there\?.*" |
+      | message | assistant    | Here.                 |
+      | message | user         | #".*still there\?.*"  |
+      | message | assistant    | Still.                |
+
+  Scenario: a DM routes to a session named for the other member (isaac-xy2i)
+    Given config:
+      | google.tonotop.topic         | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/discover   | true                           |
+      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"]          |
+    And the Chat API lists the account's spaces:
+      | name       | displayName | spaceType      |
+      | spaces/DMM |             | DIRECT_MESSAGE |
+    And the Chat API returns message "spaces/DMM/messages/1":
+      | sender.email       | micah@tonotop.com     |
+      | sender.displayName | Micah Martin          |
+      | space.type         | DIRECT_MESSAGE        |
+      | thread.name        | spaces/DMM/threads/T1 |
+      | text               | are you there?        |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Here.   |
+    When Google Chat delivers a message event for "spaces/DMM/messages/1"
+    Then session "gchat-tonotop-dm-micah-martin" has transcript matching:
+      | type    | message.role | message.content        |
+      | message | user         | #".*are you there\?.*" |
+      | message | assistant    | Here.                  |
+    And session "gchat-tonotop-dm-micah-martin" is tagged "space:DMM"
+
+  Scenario: two spaces sharing a display name get two sessions (isaac-xy2i)
+    Given config:
+      | google.tonotop.topic       | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/discover | true                           |
+    And the Chat API lists the account's spaces:
+      | name               | displayName | spaceType |
+      | spaces/AAQA7rg5Uyc | Yopp Test   | SPACE     |
+      | spaces/BBBB2222    | Yopp Test   | SPACE     |
+    And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/1":
+      | sender.email        | ada@tonotop.com               |
+      | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
+      | text                | @Isaac which room is this?    |
+      | annotations.mention | users/yopp                    |
+    And the Chat API returns message "spaces/BBBB2222/messages/1":
+      | sender.email        | ada@tonotop.com            |
+      | thread.name         | spaces/BBBB2222/threads/T1 |
+      | text                | @Isaac which room is this? |
+      | annotations.mention | users/yopp                 |
+    And the following model responses are queued:
+      | model | type | content    |
+      | echo  | text | The first. |
+      | echo  | text | The other. |
+    When Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/1"
+    And Google Chat delivers a message event for "spaces/BBBB2222/messages/1"
+    Then the session count is 2
+    And session "gchat-tonotop-yopp-test" is tagged "space:AAQA7rg5Uyc"
+    And session "gchat-tonotop-yopp-test-bbbb2222" is tagged "space:BBBB2222"
+
+  Scenario: an explicit entry overrides the session discovery would have chosen (isaac-xy2i)
+    Given config:
+      | google.tonotop.topic                                | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/discover                          | true                           |
+      | comms.gchat.gchat/spaces.spaces/AAQA7rg5Uyc.session | deploy-desk                    |
+    And the Chat API lists the account's spaces:
+      | name               | displayName | spaceType |
+      | spaces/AAQA7rg5Uyc | Yopp Test   | SPACE     |
+    And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/1":
+      | sender.email        | ada@tonotop.com               |
+      | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
+      | text                | @Isaac are you there?         |
+      | annotations.mention | users/yopp                    |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Here.   |
+    When Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/1"
+    Then session "deploy-desk" has transcript matching:
+      | type    | message.role | message.content        |
+      | message | user         | #".*are you there\?.*" |
+      | message | assistant    | Here.                  |
+    And the session count is 1

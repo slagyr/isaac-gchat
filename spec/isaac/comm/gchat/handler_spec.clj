@@ -3,6 +3,7 @@
     [isaac.api :as api]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.handler :as sut]
+    [isaac.comm.gchat.spaces :as spaces]
     [isaac.logger :as log]
     [speclj.core :refer :all]))
 
@@ -32,7 +33,7 @@
                     api/dispatch!         (fn [req] (reset! dispatched req))]
         (log/capture-logs
           (sut/handle-event {:data {:message {:name "spaces/ENG/messages/1"}}})
-          (should= "gchat-spaces-ENG" (:session-key @dispatched))
+          (should= "gchat-spaces-eng" (:session-key @dispatched))
           (should (some #(= :gchat/message-routed (:event %)) @log/captured-logs))))))
 
   (it "does not dispatch when the gate drops"
@@ -43,6 +44,62 @@
         (log/capture-logs
           (sut/handle-event {:data {:message {:name "spaces/ENG/messages/2"}}})
           (should-not @dispatched)))))
+
+  (it "a discovered space opens its canonical session, tagged with the space id"
+    (let [created (atom nil)
+          discovered {:gchat/account    "yopp@tonotop.com"
+                      :gchat/allow-from ["ada@tonotop.com"]
+                      :gchat/discover   true}]
+      (with-redefs [sut/-load-cfg         (fn [] discovered)
+                    chat-api/get-message! (fn [_] (-> mention-msg
+                                                      (assoc :name "spaces/AAQA7rg5Uyc/messages/1")
+                                                      (assoc :space {:type "SPACE" :name "spaces/AAQA7rg5Uyc"})))
+                    spaces/known          (fn [_ _ _] {:name "spaces/AAQA7rg5Uyc" :displayName "Yopp Test"})
+                    api/get-session       (fn [_] nil)
+                    api/create-session!   (fn [id opts] (reset! created [id opts]) {:name id})
+                    api/dispatch!         (fn [_])]
+        (log/capture-logs
+          (sut/handle-event {:data {:message {:name "spaces/AAQA7rg5Uyc/messages/1"}}})
+          (should= "gchat-yopp-test" (first @created))
+          (should= #{:space:AAQA7rg5Uyc} (:tags (second @created)))))))
+
+  (it "a renamed space keeps the session its tag already names"
+    (let [dispatched (atom nil)
+          discovered {:gchat/account    "yopp@tonotop.com"
+                      :gchat/allow-from ["ada@tonotop.com"]
+                      :gchat/discover   true}]
+      (with-redefs [sut/-load-cfg         (fn [] discovered)
+                    chat-api/get-message! (fn [_] (-> mention-msg
+                                                      (assoc :name "spaces/AAQA7rg5Uyc/messages/2")
+                                                      (assoc :space {:type "SPACE" :name "spaces/AAQA7rg5Uyc"})))
+                    spaces/known          (fn [_ _ _] {:name "spaces/AAQA7rg5Uyc" :displayName "Yopp Lab"})
+                    sut/-sessions         (fn [] [{:id   "gchat-yopp-test"
+                                                   :name "gchat-yopp-test"
+                                                   :tags #{:space:AAQA7rg5Uyc}}])
+                    api/get-session       (fn [_] {:name "gchat-yopp-test"})
+                    api/dispatch!         (fn [req] (reset! dispatched req))]
+        (log/capture-logs
+          (sut/handle-event {:data {:message {:name "spaces/AAQA7rg5Uyc/messages/2"}}})
+          (should= "gchat-yopp-test" (:session-key @dispatched))))))
+
+  (it "the session name says which organization's space it is, on a host with one"
+    (let [created (atom nil)
+          one-org {:comms  {:gchat {:gchat/account    "yopp@tonotop.com"
+                                    :gchat/allow-from ["ada@tonotop.com"]
+                                    :gchat/discover   true}}
+                   :google {:tonotop {:topic "projects/marigold/topics/isaac"}}}]
+      (with-redefs [sut/-load-cfg         (fn [] (get-in one-org [:comms :gchat]))
+                    sut/full-config       (fn [] one-org)
+                    chat-api/get-message! (fn [_] (-> mention-msg
+                                                      (assoc :name "spaces/AAQA7rg5Uyc/messages/1")
+                                                      (assoc :space {:type "SPACE" :name "spaces/AAQA7rg5Uyc"})))
+                    spaces/known          (fn [_ _ _] {:name "spaces/AAQA7rg5Uyc" :displayName "Yopp Test"})
+                    api/get-session       (fn [_] nil)
+                    api/create-session!   (fn [id opts] (reset! created [id opts]) {:name id})
+                    api/dispatch!         (fn [_])]
+        (log/capture-logs
+          (sut/handle-event {:data {:message {:name "spaces/AAQA7rg5Uyc/messages/1"}}})
+          (should= "gchat-tonotop-yopp-test" (first @created))))))
 
   (it "logs fetch-failed when Chat API throws"
     (with-redefs [chat-api/get-message! (fn [_] (throw (ex-info "boom" {})))]
