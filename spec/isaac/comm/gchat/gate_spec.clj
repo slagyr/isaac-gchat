@@ -41,7 +41,7 @@
       (should= "yopp" (:crew (sut/decide bare (message) {:default-crew "yopp"})))
       (should= "ops"  (:crew (sut/decide (assoc bare :crew "ops") (message) {:default-crew :yopp})))
       (should= "main" (:crew (sut/decide cfg (message) {:default-crew :yopp})))
-      (should= "main" (:crew (sut/decide bare (message))))))
+      (should-be-nil (:crew (sut/decide bare (message))))))
 
   (it "routes a mention in a configured space"
     (let [result (sut/decide cfg (message))]

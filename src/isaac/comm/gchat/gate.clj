@@ -169,7 +169,9 @@
         (and (string? c) (seq c)) c))
 
 ;; The routed crew is the space's own, else the comm's, else `:default-crew`
-;; in opts (the operator's defaults.crew - isaac-rfmh), else main.
+;; in opts (the operator's defaults.crew - isaac-rfmh), else nil - the drive
+;; resolves nil to defaults.crew itself; there is no crew named main
+;; (isaac-zule).
 (defn decide
   "cfg + fetched Chat message → {:action :route ...} | {:action :drop :reason kw}.
    Pure but for the optional :resolve-person lookup in `opts`."
@@ -231,8 +233,7 @@
                             (some-> (canon/space-tag space) hash-set))
              :crew        (or (:crew entry)
                               (:crew cfg)
-                              (crew-name (:default-crew opts))
-                              "main")
+                              (crew-name (:default-crew opts)))
              :space-cfg   entry
              :dm?         direct?
              :text        (or (:text message) "")
