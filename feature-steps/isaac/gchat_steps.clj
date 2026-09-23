@@ -41,6 +41,8 @@
     (g/dissoc! :gchat-comm)
     (g/dissoc! :gchat-http-stub)
     (g/dissoc! :gchat-known-spaces)
+    (g/dissoc! :gchat-refused-spaces-get)
+    (g/dissoc! :gchat-refused-create)
     ;; the people memo and its warn-once marks outlive a scenario otherwise
     (people/reset-memo!)
     ;; likewise the per-tenant self cache - otherwise a later scenario could
@@ -171,6 +173,20 @@
   [url]
   (second (re-find #"/v1/(spaces/[^/?]+)" (str url))))
 
+(defn- refused-spaces-get []
+  (or (g/get :gchat-refused-spaces-get) #{}))
+
+(defn- refused-create []
+  (or (g/get :gchat-refused-create) #{}))
+
+(defn- known-spaces-listing
+  "Every space 'the Chat API knows space' has named, as spaces.list would
+   report them - the fallback listing a DM's spaces.get 403 falls back to
+   (isaac-qry7, isaac-f4ab)."
+  []
+  (mapv (fn [[space info]] (assoc info :name space))
+        (g/get :gchat-known-spaces)))
+
 (defn- stub-http! [req]
   (let [req' (record-http! req)
         stub (g/get :gchat-http-stub)
@@ -184,12 +200,25 @@
            (:setup-space stub))
       {:status 200 :body {:name (:setup-space stub)}}
 
+      (and (str/includes? (str url) "/messages")
+           (contains? (refused-create) (space-of-url url)))
+      {:status 403 :body {:error {:code 403 :message "PERMISSION_DENIED: The caller does not have permission"}}}
+
       (str/includes? (str url) "/messages")
       ;; The sender on a created message is Isaac's own account - the token
       ;; that authenticated the send stands in for it, so each organization's
       ;; stubbed sends learn a distinct users/<id> (isaac-mm7o).
       {:status 200 :body {:name   (str (:url req') "/posted")
                           :sender {:name (str "users/self-" (bearer-token req'))}}}
+
+      ;; spaces.list: the account's own listing, the fallback a refused
+      ;; spaces.get falls back to.
+      (= url "https://chat.googleapis.com/v1/spaces")
+      {:status 200 :body {:spaces (known-spaces-listing)}}
+
+      (and (str/starts-with? (str url) "https://chat.googleapis.com/v1/spaces/")
+           (contains? (refused-spaces-get) (space-of-url url)))
+      {:status 403 :body {:error {:code 403 :message "PERMISSION_DENIED: The caller does not have permission"}}}
 
       ;; spaces.get: what Chat calls one space. A space no scenario named is
       ;; one Chat has not named either - the comm falls back to its id.
@@ -290,6 +319,15 @@
                                {:access_token at :refresh_token rt :expires_in 3600}
                                (feature-fs)))))
 
+(defn chat-api-refuses-spaces-get [space]
+  (own-chat-http!)
+  (gchat-lookup/forget!)
+  (g/update! :gchat-refused-spaces-get (fnil conj #{}) space))
+
+(defn chat-api-refuses-create [space]
+  (own-chat-http!)
+  (g/update! :gchat-refused-create (fnil conj #{}) space))
+
 (defn chat-api-has-no-dm [email]
   (g/update! :gchat-http-stub (fnil assoc {}) :no-dm true :no-dm-email email))
 
@@ -380,6 +418,12 @@
 
 (defgiven #"the Chat API has no direct message space with \"([^\"]+)\""
   isaac.gchat-steps/chat-api-has-no-dm)
+
+(defgiven #"the Chat API refuses spaces\.get for \"([^\"]+)\" with 403"
+  isaac.gchat-steps/chat-api-refuses-spaces-get)
+
+(defgiven #"the Chat API refuses messages\.create in \"([^\"]+)\" with 403"
+  isaac.gchat-steps/chat-api-refuses-create)
 
 (defgiven #"the Chat API creates space \"([^\"]+)\" on setup"
   isaac.gchat-steps/chat-api-creates-space-on-setup)

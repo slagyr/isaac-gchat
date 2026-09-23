@@ -1,8 +1,11 @@
 (ns isaac.comm.gchat-spec
   (:require
+    [clojure.string :as str]
+    [isaac.comm.delivery.queue :as delivery-queue]
     [isaac.comm.gchat :as sut]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.protocol :as comm]
+    [isaac.logger :as log]
     [speclj.core :refer :all]))
 
 (defn- comm-with [slice]
@@ -70,5 +73,80 @@
         (should= "spaces/ENG" (:space @captured))
         (should= "spaces/ENG/threads/T1" (:thread @captured))
         (should= "All green." (:text @captured)))))
+
+  (context "a DM the account is only invited to (isaac-qry7)"
+
+    (it "diverts the reply to the attention comm instead of posting, prefixed with the DM and sender"
+      (let [created (atom nil)
+            posted  (atom false)
+            c       (comm-with slice)]
+        (with-redefs [sut/-full-cfg (constantly {:attention {:notify {:comm "logbook" :target "ops-room"}}})
+                      chat-api/create-message! (fn [_] (reset! posted true) {:name "m1"})
+                      delivery-queue/enqueue! (fn [record] (reset! created record) record)]
+          (comm/on-cycle-start c "gchat-tonotop-dm-cordelia"
+                               {:origin {:kind :gchat :space "spaces/INV1" :thread "spaces/INV1/threads/T1"
+                                        :display-name "Cordelia" :invited? true}})
+          (log/capture-logs
+            (comm/on-reply c "gchat-tonotop-dm-cordelia" "Standing by."))
+          (should-not @posted)
+          (should= :logbook (:comm @created))
+          (should= "ops-room" (:target @created))
+          (should (str/includes? (:content @created) "spaces/INV1"))
+          (should (str/includes? (:content @created) "Cordelia"))
+          (should (str/includes? (:content @created) "Standing by.")))))
+
+    (it "with no attention comm configured, logs once and drops the reply"
+      (let [posted (atom false)
+            c      (comm-with slice)]
+        (with-redefs [sut/-full-cfg (constantly {})
+                      chat-api/create-message! (fn [_] (reset! posted true) {:name "m1"})
+                      delivery-queue/enqueue! (fn [_] (throw (ex-info "must not enqueue" {})))]
+          (comm/on-cycle-start c "gchat-tonotop-dm-cordelia"
+                               {:origin {:kind :gchat :space "spaces/INV1" :thread "spaces/INV1/threads/T1"
+                                        :invited? true}})
+          (log/capture-logs
+            (comm/on-reply c "gchat-tonotop-dm-cordelia" "Standing by.")
+            (should-not @posted)
+            (should (some #(= :gchat.dm/reply-diverted (:event %)) @log/captured-logs)))))))
+
+  (context "a reply create-message! fails"
+
+    (it "logs :gchat/delivery-failed with space, thread, status and reason - not a bare create-failed error"
+      (let [c (comm-with slice)]
+        (with-redefs [sut/access-token (constantly "at-1")
+                      chat-api/create-message! (fn [_]
+                                                 (throw (ex-info "Chat API create failed: 403"
+                                                                 {:status 403
+                                                                  :body   {:error {:message "PERMISSION_DENIED"}}})))]
+          (comm/on-cycle-start c "gchat-spaces-ENG"
+                               {:origin {:kind :gchat :space "spaces/ENG" :thread "spaces/ENG/threads/T1"}})
+          (log/capture-logs
+            (comm/on-reply c "gchat-spaces-ENG" "All green.")
+            (let [entry (first (filter #(= :gchat/delivery-failed (:event %)) @log/captured-logs))]
+              (should-not-be-nil entry)
+              (should= :error (:level entry))
+              (should= "spaces/ENG" (:space entry))
+              (should= "spaces/ENG/threads/T1" (:thread entry))
+              (should= 403 (:status entry))
+              (should= "PERMISSION_DENIED" (:reason entry)))))))
+
+    (it "reflects the delivery failure at on-turn-end, tagged :delivery-failure, then clears it"
+      (let [c (comm-with slice)]
+        (with-redefs [sut/access-token (constantly "at-1")
+                      chat-api/create-message! (fn [_]
+                                                 (throw (ex-info "Chat API create failed: 403"
+                                                                 {:status 403 :body {:error {:message "nope"}}})))]
+          (comm/on-cycle-start c "gchat-spaces-ENG"
+                               {:origin {:kind :gchat :space "spaces/ENG" :thread "spaces/ENG/threads/T1"}})
+          (log/capture-logs
+            (comm/on-reply c "gchat-spaces-ENG" "All green."))
+          (log/capture-logs
+            (comm/on-turn-end c "gchat-spaces-ENG" {})
+            (let [entry (first (filter #(= :gchat/turn-notice (:event %)) @log/captured-logs))]
+              (should-not-be-nil entry)
+              (should= :delivery-failure (:class entry))))
+          (log/capture-logs
+            (comm/on-turn-end c "gchat-spaces-ENG" {})
+            (should-not (some #(= :gchat/turn-notice (:event %)) @log/captured-logs)))))))
 
   )

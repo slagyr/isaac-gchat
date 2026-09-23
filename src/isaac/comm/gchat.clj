@@ -3,6 +3,7 @@
    and on-reply post as the Google user."
   (:require
     [clojure.string :as str]
+    [isaac.comm.delivery.queue :as delivery-queue]
     [isaac.comm.factory :as factory]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.self :as self]
@@ -10,11 +11,13 @@
     [isaac.comm.gchat.target :as target]
     [isaac.comm.gchat.tenant :as tenant]
     [isaac.comm.protocol :as comm]
+    [isaac.config.loader :as loader]
     [isaac.config.root :as root]
     [isaac.logger :as log]
     [isaac.nexus :as nexus]))
 
 (defonce ^:private origin-by-session (atom {}))
+(defonce ^:private delivery-failures* (atom {}))
 
 (defn- slice [comm]
   (or @(.-cfg comm) {}))
@@ -72,15 +75,82 @@
     (when (= :gchat (:kind origin))
       (swap! origin-by-session assoc session-key origin))))
 
+(defn -full-cfg
+  "The whole process config, not just this comm's slice - needed to read
+   :attention :notify, the same {:comm :target} coords isaac.attention reads
+   internally (isaac-qry7). Its own seam so a spec can answer without
+   installing config."
+  []
+  (loader/snapshot "gchat reply diversion"))
+
+(defn- attention-coords [full-cfg]
+  (get-in full-cfg [:attention :notify]))
+
+(defn- who [origin]
+  (or (:display-name origin) (:email origin) (:user origin) "someone"))
+
+(defn- pending-prefix
+  "One line naming the DM and the sender, and that the request is pending -
+   read before the turn's own reply text (isaac-qry7)."
+  [origin]
+  (str "Pending Chat invite: the DM with " (who origin) " (" (:space origin)
+      ") has not been accepted yet, so this reply could not be posted there."))
+
+(defn- divert-reply!
+  "The account is only invited to this DM - Chat 403s posting there, so the
+   reply goes to the attention comm instead, prefixed with the DM, the
+   sender, and that the request is pending (isaac-qry7). No attention comm
+   configured: log once and drop the reply rather than lose it silently."
+  [origin text]
+  (if-let [{:keys [comm target]} (attention-coords (-full-cfg))]
+    (do
+      (delivery-queue/enqueue! {:comm    (if (string? comm) (keyword comm) comm)
+                                :target  target
+                                :content (str (pending-prefix origin) "\n\n" text)})
+      (log/warn :gchat.dm/reply-diverted :space (:space origin) :thread (:thread origin)))
+    (log/warn :gchat.dm/reply-diverted :space (:space origin) :thread (:thread origin) :dropped true)))
+
+(defn- delivery-failure-fields
+  "The fields a reply's create-message! failure surfaces as - never the bare
+   ex-info message a raw 'Chat API create failed: 403' turn error would show
+   (isaac-qry7)."
+  [origin e]
+  (let [data   (ex-data e)
+        body   (:body data)
+        reason (or (get-in body [:error :message])
+                  (when (string? body) body)
+                  (.getMessage e))]
+    {:space (:space origin) :thread (:thread origin) :status (:status data) :reason reason}))
+
+(defn- reply!
+  "Post the turn's reply. Returns nil on success, or the failure fields when
+   create-message! throws - caught here so it never surfaces as a raw turn
+   error (isaac-qry7)."
+  [comm origin text]
+  (let [cfg   (slice comm)
+        token (access-token cfg)
+        cap   (or (:gchat/message-cap cfg) fmt/default-message-cap)]
+    (try
+      (post-chunks! (:space origin) (:thread origin) text cap token (tenant/of-comm cfg))
+      nil
+      (catch Exception e
+        (let [{:keys [space thread status reason] :as failure} (delivery-failure-fields origin e)]
+          (log/error :gchat/delivery-failed :space space :thread thread :status status :reason reason)
+          failure)))))
+
 (defn- on-reply* [comm session-key text]
-  (when-let [{:keys [space thread]} (get @origin-by-session session-key)]
+  (when-let [origin (get @origin-by-session session-key)]
     (when (seq (str/trim (str text)))
-      (let [cfg   (slice comm)
-            token (access-token cfg)
-            cap   (or (:gchat/message-cap cfg) fmt/default-message-cap)]
-        (post-chunks! space thread text cap token (tenant/of-comm cfg))))))
+      (if (:invited? origin)
+        (divert-reply! origin text)
+        (when-let [failure (reply! comm origin text)]
+          (swap! delivery-failures* assoc session-key (assoc failure :class :delivery-failure)))))))
 
 (defn- on-turn-end* [_comm session-key _result]
+  (when-let [{:keys [space thread status reason class]} (get @delivery-failures* session-key)]
+    (log/warn :gchat/turn-notice :class class :session session-key
+              :space space :thread thread :status status :reason reason)
+    (swap! delivery-failures* dissoc session-key))
   (swap! origin-by-session dissoc session-key))
 
 (deftype GchatComm [host cfg])

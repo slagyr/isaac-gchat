@@ -13,6 +13,7 @@
    A space Chat will not answer for is not remembered, so the next message
    asks again."
   (:require
+    [clojure.string :as str]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.logger :as log]))
 
@@ -46,20 +47,52 @@
         next  (recur next)
         :else nil))))
 
+(defn- forbidden?
+  "True when the exception from spaces.get carries Chat's 403 status."
+  [e]
+  (= 403 (:status (ex-data e))))
+
+(defn- dm-uri
+  "The DM's own Chat URL, for the operator to open directly (isaac-qry7)."
+  [space]
+  (str "https://chat.google.com/dm/" (second (str/split (str space) #"/"))))
+
+(def ^:private invited-action
+  "open Chat as the account and accept the request; or turn on Workspace Admin → Google Chat → Chat invitations")
+
+(defn- note-invited!
+  "The account is invited to this DM but has never accepted it - Chat 403s
+   spaces.get and messages.create alike (isaac-qry7). Logged once per space:
+   ask! only runs once per space (space-info's own memoization), so this
+   fires exactly once even across many messages in the same DM."
+  [space]
+  (log/warn :gchat.dm/invited :space space :uri (dm-uri space) :action invited-action))
+
 (defn- ask!
   "Chat's word on a space, or nil when it will not give one. spaces.get first;
-   when Chat refuses that, the account's listing, which names DMs too."
+   when Chat refuses that, the account's listing, which names DMs too. A 403
+   on spaces.get for a DM the listing still names is an invite Chat never
+   auto-accepted (isaac-qry7) - not just any refusal, and not a room."
   [id space]
   (let [token (-token id)]
     (try
       (chat-api/get-space! token space)
       (catch Exception e
-        (or (try (listed token space)
-                 (catch Exception e2
-                   (log/warn :gchat.space/unknown :space space :error (.getMessage e2))
-                   nil))
+        (let [listing (try (listed token space)
+                           (catch Exception e2
+                             (log/warn :gchat.space/unknown :space space :error (.getMessage e2))
+                             nil))]
+          (cond
+            (nil? listing)
             (do (log/warn :gchat.space/unknown :space space :error (.getMessage e))
-                nil))))))
+                nil)
+
+            (and (forbidden? e) (= "DIRECT_MESSAGE" (str (:spaceType listing))))
+            (do (note-invited! space)
+                (assoc listing :invited? true))
+
+            :else
+            listing))))))
 
 (defn space-info
   "What Chat says this space is — its display name and its type — for one

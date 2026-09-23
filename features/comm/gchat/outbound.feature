@@ -94,6 +94,24 @@ Feature: Google Chat outbound
       | #index    | 2    |
       | body.text | echo |
 
+  Scenario: a reply Chat 403s in a joined room surfaces as a delivery failure, not a bare create-failed error (isaac-qry7)
+    Given the Chat API refuses messages.create in "spaces/ENG" with 403
+    And the Chat API returns message "spaces/ENG/messages/5":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/ENG/threads/T5 |
+      | text                | @Isaac status?        |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type | content    |
+      | echo  | text | All green. |
+    When Google Chat delivers a message event for "spaces/ENG/messages/5"
+    Then the log has entries matching:
+      | level  | event                  | space      | thread                | status |
+      | :error | :gchat/delivery-failed | spaces/ENG | spaces/ENG/threads/T5 | 403    |
+    And the log has entries matching:
+      | level | event            | class              |
+      | :warn | :gchat/turn-notice | :delivery-failure |
+
   Scenario: what Isaac sends does not come back as a turn
     Given the Chat API returns message "spaces/ENG/messages/1":
       | sender.email        | ada@tonotop.com       |

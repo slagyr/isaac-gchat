@@ -95,6 +95,52 @@
           (sut/space-info :tonotop "spaces/AAQA7rg5Uyc" nil)
           (should= 2 @asked)))))
 
+  ;; spaces.get 403 on a DIRECT_MESSAGE the listing names is a Chat "message
+  ;; request" the account was invited to but never accepted (isaac-qry7). The
+  ;; caller (handler/gchat) uses :invited? to route the reply to the
+  ;; attention comm instead of posting into a space Chat will 403 on.
+  (it "spaces.get refused 403 for a direct message the listing names is invited, and logs once"
+    (let [asked  (atom 0)
+          listed (atom 0)]
+      (with-redefs [sut/-token            (fn [_] "at-1")
+                    chat-api/get-space!   (fn [_ _] (swap! asked inc) (throw (ex-info "403" {:status 403})))
+                    chat-api/list-spaces! (fn [_token & _]
+                                            (swap! listed inc)
+                                            {:spaces [{:name "spaces/INV1" :spaceType "DIRECT_MESSAGE"}]})]
+        (log/capture-logs
+          (let [info (sut/space-info :tonotop "spaces/INV1" nil)]
+            (should= true (:invited? info))
+            (should= "DIRECT_MESSAGE" (:spaceType info)))
+          (let [entry (first (filter #(= :gchat.dm/invited (:event %)) @log/captured-logs))]
+            (should-not-be-nil entry)
+            (should= :warn (:level entry))
+            (should= "spaces/INV1" (:space entry))
+            (should= "https://chat.google.com/dm/INV1" (:uri entry)))))))
+
+  (it "asking again for the same invited space does not warn a second time"
+    (with-redefs [sut/-token            (fn [_] "at-1")
+                  chat-api/get-space!   (fn [_ _] (throw (ex-info "403" {:status 403})))
+                  chat-api/list-spaces! (fn [_token & _]
+                                          {:spaces [{:name "spaces/INV1" :spaceType "DIRECT_MESSAGE"}]})]
+      (log/capture-logs
+        (sut/space-info :tonotop "spaces/INV1" nil)
+        (sut/space-info :tonotop "spaces/INV1" nil)
+        (should= 1 (count (filter #(= :gchat.dm/invited (:event %)) @log/captured-logs))))))
+
+  (it "spaces.get refused for a reason other than 403 is not invited"
+    (with-redefs [sut/-token            (fn [_] "at-1")
+                  chat-api/get-space!   (fn [_ _] (throw (ex-info "500" {:status 500})))
+                  chat-api/list-spaces! (fn [_token & _]
+                                          {:spaces [{:name "spaces/INV1" :spaceType "DIRECT_MESSAGE"}]})]
+      (should-not (:invited? (sut/space-info :tonotop "spaces/INV1" nil)))))
+
+  (it "spaces.get refused 403 for a room (not a DM) the listing names is not invited"
+    (with-redefs [sut/-token            (fn [_] "at-1")
+                  chat-api/get-space!   (fn [_ _] (throw (ex-info "403" {:status 403})))
+                  chat-api/list-spaces! (fn [_token & _]
+                                          {:spaces [{:name "spaces/ROOM" :spaceType "SPACE"}]})]
+      (should-not (:invited? (sut/space-info :tonotop "spaces/ROOM" nil)))))
+
   (it "no space is nothing to ask about"
     (should-be-nil (sut/space-info :tonotop nil nil)))
   )

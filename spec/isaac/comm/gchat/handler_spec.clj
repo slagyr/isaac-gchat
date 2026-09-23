@@ -132,6 +132,38 @@
           (should-not @dispatched)
           (should (some #(= :gchat/event-noted (:event %)) @log/captured-logs))))))
 
+  (it "a DM the account is only invited to is dispatched with :invited? on the origin (isaac-qry7)"
+    (let [dispatched (atom nil)
+          dm-msg     (-> mention-msg
+                         (assoc :name "spaces/INV1/messages/1")
+                         (assoc :annotations nil)
+                         (assoc :space {:type "DIRECT_MESSAGE" :name "spaces/INV1"}))]
+      (with-redefs [sut/-load-cfg         (fn [] (get-in cfg [:comms :gchat]))
+                    lookup/space-info     (fn [_ _ _] {:spaceType "DIRECT_MESSAGE" :invited? true})
+                    chat-api/get-message! (fn [_] dm-msg)
+                    api/get-session       (fn [_] nil)
+                    api/create-session!   (fn [id _] {:name id})
+                    api/dispatch!         (fn [req] (reset! dispatched req))]
+        (log/capture-logs
+          (sut/handle-event {:data {:message {:name "spaces/INV1/messages/1"}}})
+          (should= true (get-in @dispatched [:origin :invited?]))))))
+
+  (it "a routed DM the account has joined carries no :invited? key"
+    (let [dispatched (atom nil)
+          dm-msg     (-> mention-msg
+                         (assoc :name "spaces/DM2/messages/1")
+                         (assoc :annotations nil)
+                         (assoc :space {:type "DIRECT_MESSAGE" :name "spaces/DM2"}))]
+      (with-redefs [sut/-load-cfg         (fn [] (get-in cfg [:comms :gchat]))
+                    lookup/space-info     (fn [_ _ _] {:spaceType "DIRECT_MESSAGE"})
+                    chat-api/get-message! (fn [_] dm-msg)
+                    api/get-session       (fn [_] nil)
+                    api/create-session!   (fn [id _] {:name id})
+                    api/dispatch!         (fn [req] (reset! dispatched req))]
+        (log/capture-logs
+          (sut/handle-event {:data {:message {:name "spaces/DM2/messages/1"}}})
+          (should-not (contains? (:origin @dispatched) :invited?))))))
+
   (it "logs fetch-failed when Chat API throws"
     (with-redefs [chat-api/get-message! (fn [_] (throw (ex-info "boom" {})))]
       (log/capture-logs

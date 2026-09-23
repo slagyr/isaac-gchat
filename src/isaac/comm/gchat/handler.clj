@@ -46,7 +46,9 @@
 (defn- origin
   "What the session records about where it came from. The sender is kept as
    Google gave it — users/<id> never changes, a display name does — so a
-   transcript can still say who spoke after a rename (isaac-bklu)."
+   transcript can still say who spoke after a rename (isaac-bklu). :invited?
+   rides along when the space is a DM Chat never auto-accepted (isaac-qry7),
+   so the comm's on-reply can divert the reply instead of posting a 403."
   [decision]
   (let [{:keys [user display-name email]} (:identity decision)]
     (cond-> {:kind   :gchat
@@ -54,7 +56,8 @@
              :thread (:thread decision)}
       (seq (str (or user "")))         (assoc :user user)
       (seq (str (or display-name ""))) (assoc :display-name display-name)
-      (seq (str (or email "")))        (assoc :email email))))
+      (seq (str (or email "")))        (assoc :email email)
+      (:invited? decision)             (assoc :invited? true))))
 
 (defn- ensure-session! [decision session-key]
   (or (api/get-session session-key)
@@ -268,8 +271,9 @@
       (try
         (let [message  (chat-api/get-message! name)
               slice    (-load-cfg)
-              decision (gate/decide slice message
-                                    (decide-opts (full-config) slice message))]
+              opts     (decide-opts (full-config) slice message)
+              decision (cond-> (gate/decide slice message opts)
+                         (get-in opts [:space-info :invited?]) (assoc :invited? true))]
           (cond
             (= :log (:action decision))
             (do

@@ -498,6 +498,63 @@ Feature: Google Chat inbound gate
     And session "gchat-tonotop-yopp-test" is tagged "space:AAQA7rg5Uyc"
     And session "gchat-tonotop-yopp-test-bbbb2222" is tagged "space:BBBB2222"
 
+  Scenario: a DM the account is only invited to warns once, does not post, and diverts the reply (isaac-qry7)
+    Chat 403s spaces.get and messages.create alike on a DM the account was
+    invited to but never accepted - a message request pending in its Chat UI.
+    The turn still runs; the reply goes to the attention comm instead, named
+    for the DM and the sender.
+    Given config:
+      | comms.gchat.gchat/allow-from | ["cordelia@tonotop.com"] |
+      | attention.notify.comm        | logbook                  |
+      | attention.notify.target      | ops-room                 |
+    And the Chat API knows space "spaces/INV1":
+      | spaceType | DIRECT_MESSAGE |
+    And the Chat API refuses spaces.get for "spaces/INV1" with 403
+    And the Chat API returns message "spaces/INV1/messages/1":
+      | sender.email       | cordelia@tonotop.com   |
+      | sender.displayName | Cordelia               |
+      | thread.name        | spaces/INV1/threads/T1 |
+      | text                | are you there?         |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Here.   |
+    When Google Chat delivers a message event for "spaces/INV1/messages/1"
+    Then the log has entries matching:
+      | level | event              | space       |
+      | :warn | :gchat.dm/invited  | spaces/INV1 |
+    And exactly 1 log entry has event ":gchat.dm/invited"
+    And 0 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/INV1/messages" were made
+    And the directory "comm/delivery/pending" has exactly 1 file
+    And the only file in "comm/delivery/pending" EDN contains:
+      | path    | value                                              |
+      | comm    | :logbook                                           |
+      | target  | ops-room                                           |
+      | content | contains "spaces/INV1" and "Cordelia" and "Here."  |
+
+  Scenario: a second message in the same invited DM does not warn again (isaac-qry7)
+    Given config:
+      | comms.gchat.gchat/allow-from | ["cordelia@tonotop.com"] |
+    And the Chat API knows space "spaces/INV1":
+      | spaceType | DIRECT_MESSAGE |
+    And the Chat API refuses spaces.get for "spaces/INV1" with 403
+    And the Chat API returns message "spaces/INV1/messages/1":
+      | sender.email       | cordelia@tonotop.com   |
+      | sender.displayName | Cordelia               |
+      | thread.name        | spaces/INV1/threads/T1 |
+      | text                | are you there?         |
+    And the Chat API returns message "spaces/INV1/messages/2":
+      | sender.email       | cordelia@tonotop.com   |
+      | sender.displayName | Cordelia               |
+      | thread.name        | spaces/INV1/threads/T1 |
+      | text                | still there?           |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Here.   |
+      | echo  | text | Still.  |
+    When Google Chat delivers a message event for "spaces/INV1/messages/1"
+    And Google Chat delivers a message event for "spaces/INV1/messages/2"
+    Then exactly 1 log entry has event ":gchat.dm/invited"
+
   Scenario: an entry's explicit session overrides the canonical name (isaac-ihuc)
     Given config:
       | google.tonotop.topic                                | projects/marigold/topics/isaac |
