@@ -32,14 +32,34 @@
 (defn- display-name [info]
   (not-empty (str (or (:displayName info) ""))))
 
+(defn- listed
+  "The account's own listing, when `spaces.get` will not answer: Chat refuses
+   spaces.get on a direct message it will happily list (403, yopp 2026-09-23,
+   isaac-f4ab). One paged `spaces.list`, the entry whose name matches, or nil."
+  [token space]
+  (loop [page-token nil]
+    (let [body  (chat-api/list-spaces! token (when page-token {:page-token page-token}))
+          found (first (filter #(= space (:name %)) (:spaces body)))
+          next  (not-empty (str (or (:nextPageToken body) "")))]
+      (cond
+        found found
+        next  (recur next)
+        :else nil))))
+
 (defn- ask!
-  "Chat's word on a space, or nil when it will not give one."
+  "Chat's word on a space, or nil when it will not give one. spaces.get first;
+   when Chat refuses that, the account's listing, which names DMs too."
   [id space]
-  (try
-    (chat-api/get-space! (-token id) space)
-    (catch Exception e
-      (log/warn :gchat.space/unknown :space space :error (.getMessage e))
-      nil)))
+  (let [token (-token id)]
+    (try
+      (chat-api/get-space! token space)
+      (catch Exception e
+        (or (try (listed token space)
+                 (catch Exception e2
+                   (log/warn :gchat.space/unknown :space space :error (.getMessage e2))
+                   nil))
+            (do (log/warn :gchat.space/unknown :space space :error (.getMessage e))
+                nil))))))
 
 (defn space-info
   "What Chat says this space is — its display name and its type — for one

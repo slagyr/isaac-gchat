@@ -25,6 +25,42 @@
         (should= "Yopp Test" (:displayName (sut/space-info :tonotop "spaces/AAQA7rg5Uyc" nil)))
         (should= 1 @asked))))
 
+  ;; Chat refuses spaces.get on a direct message it lists without complaint
+  ;; (403, yopp 2026-09-23). The listing is the fallback, asked once, and its
+  ;; answer is remembered like a get (isaac-f4ab).
+  (it "falls back to the account's listing when spaces.get is refused, and remembers it"
+    (let [asked  (atom 0)
+          listed (atom 0)]
+      (with-redefs [sut/-token          (fn [_] "at-1")
+                    chat-api/get-space! (asking asked {})
+                    chat-api/list-spaces! (fn [_token & _]
+                                            (swap! listed inc)
+                                            {:spaces [{:name "spaces/ROOM" :spaceType "SPACE" :displayName "Eng"}
+                                                      {:name "spaces/DM1" :spaceType "DIRECT_MESSAGE"}]})]
+        (should= "DIRECT_MESSAGE" (:spaceType (sut/space-info :tonotop "spaces/DM1" nil)))
+        (should= "DIRECT_MESSAGE" (:spaceType (sut/space-info :tonotop "spaces/DM1" nil)))
+        (should= 1 @listed))))
+
+  (it "walks the listing's pages before giving up"
+    (let [pages (atom 0)]
+      (with-redefs [sut/-token          (fn [_] "at-1")
+                    chat-api/get-space! (asking (atom 0) {})
+                    chat-api/list-spaces! (fn [_token & [{:keys [page-token]}]]
+                                            (swap! pages inc)
+                                            (if page-token
+                                              {:spaces [{:name "spaces/DM2" :spaceType "DIRECT_MESSAGE"}]}
+                                              {:spaces [{:name "spaces/OTHER" :spaceType "SPACE"}] :nextPageToken "p2"}))]
+        (should= "DIRECT_MESSAGE" (:spaceType (sut/space-info :tonotop "spaces/DM2" nil)))
+        (should= 2 @pages))))
+
+  (it "does not list when spaces.get answers"
+    (let [listed (atom 0)]
+      (with-redefs [sut/-token          (fn [_] "at-1")
+                    chat-api/get-space! (asking (atom 0) {"spaces/ROOM" {:displayName "Eng" :spaceType "SPACE"}})
+                    chat-api/list-spaces! (fn [& _] (swap! listed inc) {:spaces []})]
+        (sut/space-info :tonotop "spaces/ROOM" nil)
+        (should= 0 @listed))))
+
   (it "each organization asks for itself — two accounts, two answers"
     (let [asked (atom 0)]
       (with-redefs [sut/-token        (fn [_] "at-1")
