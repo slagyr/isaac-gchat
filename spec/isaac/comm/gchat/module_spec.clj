@@ -29,6 +29,7 @@
     (should= ["https://www.googleapis.com/auth/chat.messages"
               "https://www.googleapis.com/auth/chat.spaces.readonly"
               "https://www.googleapis.com/auth/chat.memberships.readonly"
-              "https://www.googleapis.com/auth/chat.spaces.create"]
+              "https://www.googleapis.com/auth/chat.spaces.create"
+              "https://www.googleapis.com/auth/chat.memberships"]
              (:isaac.google/scopes manifest)))
   )
