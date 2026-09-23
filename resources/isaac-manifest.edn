@@ -1,5 +1,5 @@
 {:id          :isaac.comm.gchat
- :version     "0.2.0"
+ :version     "0.2.1"
  :builtin?    true
  :factory     isaac.comm.gchat.module/create-module
  :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
