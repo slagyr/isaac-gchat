@@ -1,5 +1,5 @@
 {:id          :isaac.comm.gchat
- :version     "0.2.10"
+ :version     "0.2.11"
  :builtin?    true
  :factory     isaac.comm.gchat.module/create-module
  :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
@@ -18,11 +18,18 @@
                          :gchat/message-cap {:type        :int
                                              :description "Chunk reply text above this character count. Chat's limit is 4096; default 4096."}
                          :gchat/reactions   {:type        :one-of
-                                             :specs       [{:type :boolean}
-                                                           {:type       :map
+                                             ;; :map first - :boolean's coerce accepts any value (a
+                                             ;; truthy check), so listed first it would swallow a map
+                                             ;; override into a bare `true` before :map ever gets a look.
+                                             :specs       [{:type       :map
                                                             :key-spec   {:type :keyword}
-                                                            :value-spec {:type :string}}]
-                                             :description "Reaction glyphs shown on the triggering Chat message as Yopp works — 👀 while a turn is in flight, ✅ once it answers, ⚠️ on a hard error, ⏳ while parked on provider weather. A map overrides any of :working/:done/:failed/:parked over the default {:working \"👀\" :done \"✅\" :failed \"⚠️\" :parked \"⏳\"}; false turns the whole lifecycle off. Reactions never notify (isaac-1bq1)."}
+                                                            ;; per-key value: :boolean first too - :string's
+                                                            ;; coerce stringifies anything, so a per-key
+                                                            ;; `false` would otherwise become "false".
+                                                            :value-spec {:type  :one-of
+                                                                        :specs [{:type :boolean} {:type :string}]}}
+                                                           {:type :boolean}]
+                                             :description "Reaction glyphs shown on the triggering Chat message as Yopp works — 👀 while a turn is in flight, ✅ once it answers, ⚠️ on a hard error, ⏳ while parked on provider weather; 🧠/🔧/💬 accumulate once per turn on the first reasoning chunk, tool call, and aside and stay. A map overrides any of :working/:done/:failed/:parked/:thinking/:tool/:aside over the default {:working \"👀\" :done \"✅\" :failed \"⚠️\" :parked \"⏳\" :thinking \"🧠\" :tool \"🔧\" :aside \"💬\"}; a key set to false skips that one kind; false for the whole value turns the whole lifecycle off. Reactions never notify (isaac-1bq1, isaac-oits)."}
                          :gchat/spaces      {:type        :map
                                              :key-spec    {:type :keyword}
                                              :value-spec  {:type   :map

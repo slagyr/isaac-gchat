@@ -380,6 +380,121 @@
 
   )
 
+(describe "gchat comm accumulated progress reactions (isaac-oits)"
+
+  (it "adds the thinking glyph once on the first reasoning chunk, not on a second"
+    (let [created (atom [])
+          c       (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-reaction! (fn [opts] (swap! created conj opts) {:name "r1"})]
+        (origined-msg c "accum-thinking-1" "spaces/ENG/messages/1")
+        (comm/on-reckoning c "accum-thinking-1" {} "chunk one")
+        (comm/on-reckoning c "accum-thinking-1" {} "chunk two")
+        ;; the working reaction is one create too - only the second is thinking
+        (should= 2 (count @created))
+        (should= "🧠" (:emoji (second @created))))))
+
+  (it "adds the tool glyph once across three tool calls in the same turn"
+    (let [created (atom [])
+          c       (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-reaction! (fn [opts] (swap! created conj opts) {:name "r1"})]
+        (origined-msg c "accum-tool-1" "spaces/ENG/messages/1")
+        (comm/on-tool-call c "accum-tool-1" {:name "gchat__spaces"})
+        (comm/on-tool-call c "accum-tool-1" {:name "gchat__spaces"})
+        (comm/on-tool-call c "accum-tool-1" {:name "gchat__spaces"})
+        (should= 2 (count @created))
+        (should= "🔧" (:emoji (second @created))))))
+
+  (it "adds the aside glyph once"
+    (let [created (atom [])
+          c       (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-reaction! (fn [opts] (swap! created conj opts) {:name "r1"})]
+        (origined-msg c "accum-aside-1" "spaces/ENG/messages/1")
+        (comm/on-aside c "accum-aside-1" {} "on it")
+        (comm/on-aside c "accum-aside-1" {} "still on it")
+        (should= 2 (count @created))
+        (should= "💬" (:emoji (second @created))))))
+
+  (it "keeps thinking and tool once the turn ends - only the status slot is ever deleted"
+    (let [reactions (atom [])
+          c         (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-message!  (fn [_] {:name "m1"})
+                    chat-api/create-reaction! (fn [opts]
+                                                (swap! reactions conj [:create opts])
+                                                {:name (str "r" (count @reactions))})
+                    chat-api/delete-reaction! (fn [opts] (swap! reactions conj [:delete opts]))]
+        (origined-msg c "accum-turn-1" "spaces/ENG/messages/1")
+        (comm/on-reckoning c "accum-turn-1" {} "thinking")
+        (comm/on-tool-call c "accum-turn-1" {:name "gchat__spaces"})
+        (comm/on-reply c "accum-turn-1" "All set.")
+        ;; working, thinking, tool all create; only working is ever deleted, then done creates
+        (should= [:create :create :create :delete :create] (mapv first @reactions))
+        (should= "👀" (get-in @reactions [0 1 :emoji]))
+        (should= "🧠" (get-in @reactions [1 1 :emoji]))
+        (should= "🔧" (get-in @reactions [2 1 :emoji]))
+        (should= "✅" (get-in @reactions [4 1 :emoji])))))
+
+  (it "resets the already-added guard when a new triggering message starts its lifecycle"
+    (let [created (atom [])
+          c       (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-message!  (fn [_] {:name "m1"})
+                    chat-api/create-reaction! (fn [opts] (swap! created conj opts) {:name "r1"})
+                    chat-api/delete-reaction! (fn [_] nil)]
+        (origined-msg c "accum-reset-1" "spaces/ENG/messages/1")
+        (comm/on-reckoning c "accum-reset-1" {} "thinking one")
+        (comm/on-reply c "accum-reset-1" "All set.")
+        (reset! created [])
+        ;; a new triggering message starts the session's lifecycle over
+        (origined-msg c "accum-reset-1" "spaces/ENG/messages/2")
+        (comm/on-reckoning c "accum-reset-1" {} "thinking two")
+        (should (some #(= "🧠" (:emoji %)) @created)))))
+
+  (it "does not keep a stale guard across a park/resume of the same message"
+    (let [created (atom [])
+          c       (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-message!  (fn [_] {:name "m1"})
+                    chat-api/create-reaction! (fn [opts] (swap! created conj opts) {:name "r1"})
+                    chat-api/delete-reaction! (fn [_] nil)]
+        (origined-msg c "accum-park-1" "spaces/ENG/messages/1")
+        (comm/on-tool-call c "accum-park-1" {:name "gchat__spaces"})
+        (comm/on-turn-end c "accum-park-1"
+                          {:ended-by :provider-unavailable :unavailable? true :reason :wall
+                           :retry-at "2026-04-21T16:40:00Z"})
+        (reset! created [])
+        ;; the same message resumes - no second 🔧
+        (origined-msg c "accum-park-1" "spaces/ENG/messages/1")
+        (comm/on-tool-call c "accum-park-1" {:name "gchat__spaces"})
+        (should-not (some #(= "🔧" (:emoji %)) @created)))))
+
+  (it "skips a kind configured false, leaves the others alone"
+    (let [created (atom [])
+          c       (comm-with (assoc slice :gchat/reactions {:tool false}))]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-reaction! (fn [opts] (swap! created conj opts) {:name "r1"})]
+        (origined-msg c "accum-off-1" "spaces/ENG/messages/1")
+        (comm/on-tool-call c "accum-off-1" {:name "gchat__spaces"})
+        (comm/on-reckoning c "accum-off-1" {} "thinking")
+        (should-not (some #(= "🔧" (:emoji %)) @created))
+        (should (some #(= "🧠" (:emoji %)) @created)))))
+
+  (it "makes no accumulate calls when gchat/reactions is false"
+    (let [calls (atom 0)
+          c     (comm-with (assoc slice :gchat/reactions false))]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-reaction! (fn [_] (swap! calls inc) {:name "r1"})]
+        (origined-msg c "accum-disabled-1" "spaces/ENG/messages/1")
+        (comm/on-reckoning c "accum-disabled-1" {} "thinking")
+        (comm/on-tool-call c "accum-disabled-1" {:name "gchat__spaces"})
+        (comm/on-aside c "accum-disabled-1" {} "on it")
+        (should= 0 @calls))))
+
+  )
+
 (describe "gchat comm on-turn-end — reactions unrelated to what went wrong"
 
   (it "logs once and does not retry when the notice itself fails to deliver"

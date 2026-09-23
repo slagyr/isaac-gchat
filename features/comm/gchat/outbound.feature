@@ -377,3 +377,104 @@ Feature: Google Chat outbound
     Then no reaction calls were made
     And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX5/messages" matches:
       | body.text | All clear. |
+
+  # Accumulated progress reactions — 🧠 thought, 🔧 tool, 💬 aside stay on the
+  # triggering message once added, alongside the 1bq1 status lifecycle
+  # (isaac-oits). Each scenario below gets its own space, same reason as RX1-5.
+
+  Scenario: a turn with two reasoning bursts and a tool call carries 🧠 🔧 💬 ✅ — only 👀 was ever deleted (isaac-oits)
+    Given the crew "main" allows tools: "gchat__spaces"
+    And config:
+      | comms.gchat.gchat/spaces.spaces/RX6.name | reactions-six |
+      | comms.gchat.gchat/spaces.spaces/RX6.crew | main          |
+    And the Chat API returns message "spaces/RX6/messages/1":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/RX6/threads/T1 |
+      | text                | @Isaac status?        |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type      | content         | tool_call     | arguments |
+      | echo  | reasoning | First thought.  |               |           |
+      | echo  |           |                 | gchat__spaces | {}        |
+      | echo  | reasoning | Second thought. |               |           |
+      | echo  | text      | All set.        |               |           |
+    When Google Chat delivers a message event for "spaces/RX6/messages/1"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX6/messages/1/reactions" matches:
+      | #index             | 0  |
+      | body.emoji.unicode | 👀 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX6/messages/1/reactions" matches:
+      | #index             | 1  |
+      | body.emoji.unicode | 🧠 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX6/messages/1/reactions" matches:
+      | #index             | 2  |
+      | body.emoji.unicode | 🔧 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX6/messages/1/reactions" matches:
+      | #index             | 3  |
+      | body.emoji.unicode | 💬 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX6/messages/1/reactions" matches:
+      | #index             | 4  |
+      | body.emoji.unicode | ✅ |
+    And 5 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/RX6/messages/1/reactions" were made
+    And 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/RX6/messages/1/reactions/1" were made
+
+  Scenario: three tool calls in one turn add the tool and aside glyphs once each, not per call (isaac-oits)
+    Given the crew "main" allows tools: "gchat__spaces"
+    And config:
+      | comms.gchat.gchat/spaces.spaces/RX7.name | reactions-seven |
+      | comms.gchat.gchat/spaces.spaces/RX7.crew | main            |
+    And the Chat API returns message "spaces/RX7/messages/1":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/RX7/threads/T1 |
+      | text                | @Isaac status?        |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type | content | tool_call     | arguments |
+      | echo  |      |         | gchat__spaces | {}        |
+      | echo  |      |         | gchat__spaces | {}        |
+      | echo  |      |         | gchat__spaces | {}        |
+      | echo  | text | Done.   |               |           |
+    When Google Chat delivers a message event for "spaces/RX7/messages/1"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX7/messages/1/reactions" matches:
+      | #index             | 0  |
+      | body.emoji.unicode | 👀 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX7/messages/1/reactions" matches:
+      | #index             | 1  |
+      | body.emoji.unicode | 🔧 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX7/messages/1/reactions" matches:
+      | #index             | 2  |
+      | body.emoji.unicode | 💬 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX7/messages/1/reactions" matches:
+      | #index             | 3  |
+      | body.emoji.unicode | ✅ |
+    And 4 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/RX7/messages/1/reactions" were made
+
+  Scenario: gchat/reactions {tool false} skips only the tool glyph, other kinds unaffected (isaac-oits)
+    Given the crew "main" allows tools: "gchat__spaces"
+    And config:
+      | comms.gchat.gchat/reactions.tool         | false           |
+      | comms.gchat.gchat/spaces.spaces/RX8.name | reactions-eight |
+      | comms.gchat.gchat/spaces.spaces/RX8.crew | main            |
+    And the Chat API returns message "spaces/RX8/messages/1":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/RX8/threads/T1 |
+      | text                | @Isaac status?        |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type      | content        | tool_call     | arguments |
+      | echo  | reasoning | Thinking away. |               |           |
+      | echo  |           |                | gchat__spaces | {}        |
+      | echo  | text      | Done.          |               |           |
+    When Google Chat delivers a message event for "spaces/RX8/messages/1"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX8/messages/1/reactions" matches:
+      | #index             | 0  |
+      | body.emoji.unicode | 👀 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX8/messages/1/reactions" matches:
+      | #index             | 1  |
+      | body.emoji.unicode | 🧠 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX8/messages/1/reactions" matches:
+      | #index             | 2  |
+      | body.emoji.unicode | 💬 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX8/messages/1/reactions" matches:
+      | #index             | 3  |
+      | body.emoji.unicode | ✅ |
+    And 4 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/RX8/messages/1/reactions" were made

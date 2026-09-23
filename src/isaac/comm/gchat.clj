@@ -83,10 +83,19 @@
       (log/error :gchat.send/failed :error (.getMessage e))
       {:ok false :transient? true :error (.getMessage e)})))
 
-;; region ----- Progress reactions (isaac-1bq1) -----
+;; region ----- Progress reactions (isaac-1bq1, accumulated isaac-oits) -----
 
+;; 🧠/🔧/💬 accumulate: the first reasoning chunk, tool call, or aside of a
+;; turn adds its glyph to the triggering message once, and it stays - never
+;; removed by this module. 👀/✅/⚠️/⏳ keep the 1bq1 remove-then-add lifecycle
+;; on their own :status slot. reaction-state* is now per session a small map
+;; of slot -> {:message :reaction :emoji :kind}; :status is the only slot
+;; ever removed (isaac-oits).
 (def default-reactions
-  {:working "👀" :done "✅" :failed "⚠️" :parked "⏳"})
+  {:working "👀" :done "✅" :failed "⚠️" :parked "⏳"
+   :thinking "🧠" :tool "🔧" :aside "💬"})
+
+(def ^:private accumulated-kinds #{:thinking :tool :aside})
 
 (defn- reactions-cfg
   "The configured reaction glyphs, defaults merged in - or nil when
@@ -98,35 +107,36 @@
       (map? v)   (merge default-reactions v)
       :else      default-reactions)))
 
-(defn- reaction-state [session-key]
-  (get @reaction-state* session-key))
+(defn- reaction-state [session-key slot]
+  (get-in @reaction-state* [session-key slot]))
 
 (defn- reaction-remove!
-  "Delete the session's current reaction, if any. A failure is logged once
+  "Delete the session's reaction in `slot`, if any. A failure is logged once
    at debug and never retried or surfaced as a turn error (isaac-1bq1)."
-  [comm session-key]
-  (when-let [{:keys [reaction message emoji]} (reaction-state session-key)]
+  [comm session-key slot]
+  (when-let [{:keys [reaction message emoji]} (reaction-state session-key slot)]
     (try
       (chat-api/delete-reaction! {:reaction reaction :token (access-token (slice comm))})
       (catch Exception e
         (log/debug :gchat.reaction/failed :message message :emoji emoji :status (:status (ex-data e)))))
-    (swap! reaction-state* dissoc session-key)))
+    (swap! reaction-state* update session-key dissoc slot)))
 
 (defn- reaction-add!
-  "Add a reaction to `message`, remembering its resource name for the later
-   remove. A failure is logged once at debug and never retried."
-  [comm session-key message kind emoji]
+  "Add a reaction to `message` in `slot`, remembering its resource name for a
+   later remove. A failure is logged once at debug and never retried."
+  [comm session-key slot message kind emoji]
   (try
     (let [resp (chat-api/create-reaction! {:message message :emoji emoji :token (access-token (slice comm))})]
-      (swap! reaction-state* assoc session-key {:message message :reaction (:name resp) :emoji emoji :kind kind}))
+      (swap! reaction-state* assoc-in [session-key slot] {:message message :reaction (:name resp) :emoji emoji :kind kind}))
     (catch Exception e
       (log/debug :gchat.reaction/failed :message message :emoji emoji :status (:status (ex-data e))))))
 
 (defn- set-reaction!
-  "Remove-then-add for every change - there is no reaction update (isaac-1bq1)."
+  "Remove-then-add for every status change - there is no reaction update
+   (isaac-1bq1). Only the :status slot ever calls this."
   [comm session-key message kind emoji]
-  (reaction-remove! comm session-key)
-  (reaction-add! comm session-key message kind emoji))
+  (reaction-remove! comm session-key :status)
+  (reaction-add! comm session-key :status message kind emoji))
 
 (defn- reaction-working!
   "👀 on the triggering message, once per turn - the first cycle. A turn
@@ -135,7 +145,7 @@
   [comm session-key origin]
   (when-let [reactions (reactions-cfg (slice comm))]
     (when-let [message (:message origin)]
-      (let [state (reaction-state session-key)]
+      (let [state (reaction-state session-key :status)]
         (when-not (and (= :parked (:kind state)) (= message (:message state)))
           (set-reaction! comm session-key message :working (:working reactions)))))))
 
@@ -161,6 +171,27 @@
     (when-let [message (:message origin)]
       (set-reaction! comm session-key message :parked (:parked reactions)))))
 
+(defn- reset-accumulated!
+  "Forget this session's 🧠/🔧/💬 bookkeeping so a new triggering message can
+   accumulate its own - the old message's glyphs are left exactly where Chat
+   put them (isaac-oits). A no-op when the message resumes (park/resume)."
+  [session-key message]
+  (let [prior (:message (reaction-state session-key :status))]
+    (when (and message (not= message prior))
+      (swap! reaction-state* update session-key
+             #(apply dissoc % accumulated-kinds)))))
+
+(defn- reaction-accumulate!
+  "First reasoning chunk / tool call / aside of the turn adds `kind`'s glyph
+   to the triggering message, once - never removed by this module. A kind
+   configured `false` (or the whole lifecycle off) is skipped (isaac-oits)."
+  [comm session-key kind]
+  (when-let [reactions (reactions-cfg (slice comm))]
+    (when-let [glyph (get reactions kind)]
+      (when-let [message (:message (get @origin-by-session session-key))]
+        (when-not (reaction-state session-key kind)
+          (reaction-add! comm session-key kind message kind glyph))))))
+
 ;; endregion ^^^^^ Progress reactions ^^^^^
 
 (defn- on-cycle-start* [comm session-key cycle]
@@ -168,7 +199,17 @@
     (when (= :gchat (:kind origin))
       (swap! origin-by-session assoc session-key origin)
       (when (= 1 (:n cycle))
+        (reset-accumulated! session-key (:message origin))
         (reaction-working! comm session-key origin)))))
+
+(defn- on-reckoning* [comm session-key _cycle _chunk]
+  (reaction-accumulate! comm session-key :thinking))
+
+(defn- on-tool-call* [comm session-key _tool-call]
+  (reaction-accumulate! comm session-key :tool))
+
+(defn- on-aside* [comm session-key _cycle _text]
+  (reaction-accumulate! comm session-key :aside))
 
 (defn -full-cfg
   "The whole process config, not just this comm's slice - needed to read
@@ -363,6 +404,9 @@
   (merge comm/defaults
          {:send!          send!*
           :on-cycle-start on-cycle-start*
+          :on-reckoning   on-reckoning*
+          :on-tool-call   on-tool-call*
+          :on-aside       on-aside*
           :on-reply       on-reply*
           :on-turn-end    on-turn-end*}))
 
