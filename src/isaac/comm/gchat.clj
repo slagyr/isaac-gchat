@@ -15,7 +15,10 @@
     [isaac.config.loader :as loader]
     [isaac.config.root :as root]
     [isaac.logger :as log]
-    [isaac.nexus :as nexus]))
+    [isaac.nexus :as nexus])
+  (:import
+    (java.time Instant ZoneId)
+    (java.time.format DateTimeFormatter)))
 
 (defonce ^:private origin-by-session (atom {}))
 (defonce ^:private delivery-failures* (atom {}))
@@ -159,11 +162,101 @@
           (swap! delivery-failures* assoc session-key (assoc failure :class :delivery-failure))
           (note-own-reply! comm origin text))))))
 
-(defn- on-turn-end* [_comm session-key _result]
-  (when-let [{:keys [space thread status reason class]} (get @delivery-failures* session-key)]
-    (log/warn :gchat/turn-notice :class class :session session-key
-              :space space :thread thread :status status :reason reason)
-    (swap! delivery-failures* dissoc session-key))
+;; What went wrong — isaac-h5v8. The drive never ends a turn silently: an
+;; ordinary failure carries :ended-by :error, and provider weather (rate
+;; limit, auth, a stalled stream) carries :ended-by :provider-unavailable
+;; plus :reason and :retry-at (isaac.drive.weather/stamp-weather!). Both are
+;; in-thread notices to the person who sent the message — never a stack
+;; trace, a raw provider payload or a token. A reply that itself fails to
+;; post (isaac-qry7, above) is its own case — the thread can't hear a notice
+;; when posting to it is exactly what just failed, so that one stays an
+;; operator-facing :gchat/turn-notice log instead of another post attempt.
+
+;; Sessions with an unanswered park notice outstanding. One notice per park:
+;; set when it posts, cleared only when the turn next ends with something
+;; other than weather (a reply, cancel, cycle-limit, ...) — not by every
+;; on-turn-end, so a re-wall mid-park stays quiet.
+(defonce ^:private parked-sessions (atom #{}))
+
+(defn- weather-result? [result]
+  (boolean (or (:unavailable? result)
+               (= :provider-unavailable (:ended-by result)))))
+
+(defn- error-result? [result]
+  (= :error (:ended-by result)))
+
+(defn- retry-time-text
+  "The retry-at ISO instant as a local clock reading, e.g. \"4:40pm\" — the
+   viewer's own machine time, so the notice never leaks tick precision."
+  [retry-at]
+  (try
+    (when (seq retry-at)
+      (let [zoned (.atZone (Instant/parse retry-at) (ZoneId/systemDefault))
+            fmt   (DateTimeFormatter/ofPattern "h:mma")]
+        (str/lower-case (.format zoned fmt))))
+    (catch Exception _ nil)))
+
+(def ^:private weather-reason-words
+  {:wall           "Out of tokens"
+   :auth           "Waiting on a login"
+   :stream-stalled "The connection stalled"})
+
+(defn- weather-notice-text [{:keys [reason retry-at]}]
+  (let [what  (get weather-reason-words reason "Hit a provider issue")
+        when* (retry-time-text retry-at)]
+    (if when*
+      (str what " until " when* "; I will answer then.")
+      (str what "; I will answer when it clears."))))
+
+(defn- failure-class
+  "Coarse, name-only classification of a hard turn error — never the
+   exception message or provider payload, only its shape. Same vocabulary
+   as the :class a reply-post failure logs (isaac-qry7): :provider-error,
+   :tool-failure, :delivery-failure."
+  [result]
+  (let [ex-class (some-> (:ex-class result) str str/lower-case)]
+    (cond
+      (some->> ex-class (re-find #"tool")) :tool-failure
+      (some->> ex-class (re-find #"deliver")) :delivery-failure
+      :else :provider-error)))
+
+(defn- error-notice-text [result]
+  (str "Something went wrong (" (str/replace (name (failure-class result)) "-" " ") "). "
+       "I couldn't finish that reply."))
+
+(defn- post-notice!
+  "Best-effort in-thread notice. One attempt; a delivery failure is logged
+   once and never retried in a loop (isaac-h5v8)."
+  [comm session-key text]
+  (when-let [{:keys [space thread]} (get @origin-by-session session-key)]
+    (when (seq (str/trim (str text)))
+      (try
+        (let [cfg   (slice comm)
+              token (access-token cfg)
+              cap   (or (:gchat/message-cap cfg) fmt/default-message-cap)]
+          (post-chunks! space thread text cap token (tenant/of-comm cfg)))
+        (catch Exception e
+          (log/error :gchat.notice/failed :session session-key :error (.getMessage e)))))))
+
+(defn- on-turn-end* [comm session-key result]
+  (if-let [{:keys [space thread status reason class]} (get @delivery-failures* session-key)]
+    (do
+      (log/warn :gchat/turn-notice :class class :session session-key
+                :space space :thread thread :status status :reason reason)
+      (swap! delivery-failures* dissoc session-key)
+      (swap! parked-sessions disj session-key))
+    (cond
+      (weather-result? result)
+      (when-not (contains? @parked-sessions session-key)
+        (swap! parked-sessions conj session-key)
+        (post-notice! comm session-key (weather-notice-text result)))
+
+      (error-result? result)
+      (do (swap! parked-sessions disj session-key)
+          (post-notice! comm session-key (error-notice-text result)))
+
+      :else
+      (swap! parked-sessions disj session-key)))
   (swap! origin-by-session dissoc session-key))
 
 (deftype GchatComm [host cfg])

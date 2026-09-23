@@ -166,3 +166,113 @@
             (should-not (some #(= :gchat/turn-notice (:event %)) @log/captured-logs)))))))
 
   )
+
+(defn- origined [c session-key]
+  (comm/on-cycle-start c session-key
+                       {:origin {:kind :gchat :space "spaces/ENG" :thread "spaces/ENG/threads/T1"}}))
+
+(describe "gchat comm on-turn-end — what went wrong"
+
+  (it "posts one notice naming the reason and retry time on provider weather"
+    (let [posted (atom [])
+          c      (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [opts] (swap! posted conj opts) {:name "m1"})]
+        (origined c "weather-1")
+        (comm/on-turn-end c "weather-1"
+                          {:ended-by     :provider-unavailable
+                           :unavailable? true
+                           :reason       :wall
+                           :retry-at     "2026-04-21T16:40:00Z"})
+        (should= 1 (count @posted))
+        (should (re-find #"(?i)out of tokens" (:text (first @posted))))
+        (should (re-find #"\d{1,2}:\d{2}(am|pm)" (:text (first @posted))))
+        (should (re-find #"I will answer then" (:text (first @posted)))))))
+
+  (it "does not repost the park notice for a second walled cycle in the same park"
+    (let [posted (atom [])
+          c      (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [opts] (swap! posted conj opts) {:name "m1"})]
+        (origined c "weather-2")
+        (comm/on-turn-end c "weather-2"
+                          {:ended-by :provider-unavailable :unavailable? true
+                           :reason   :wall :retry-at "2026-04-21T16:40:00Z"})
+        (origined c "weather-2")
+        (comm/on-turn-end c "weather-2"
+                          {:ended-by :provider-unavailable :unavailable? true
+                           :reason   :wall :retry-at "2026-04-21T17:10:00Z"})
+        (should= 1 (count @posted)))))
+
+  (it "posts no extra notice when the resumed turn ends with a reply"
+    (let [posted (atom [])
+          c      (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [opts] (swap! posted conj opts) {:name "m1"})]
+        (origined c "weather-3")
+        (comm/on-turn-end c "weather-3"
+                          {:ended-by :provider-unavailable :unavailable? true
+                           :reason   :wall :retry-at "2026-04-21T16:40:00Z"})
+        (origined c "weather-3")
+        (comm/on-reply c "weather-3" "Who's there")
+        (comm/on-turn-end c "weather-3" {:ended-by :reply})
+        (should= 2 (count @posted))
+        (should= "Who's there" (:text (second @posted))))))
+
+  (it "reposts on a fresh park once the prior one has cleared"
+    (let [posted (atom [])
+          c      (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [opts] (swap! posted conj opts) {:name "m1"})]
+        (origined c "weather-4")
+        (comm/on-turn-end c "weather-4"
+                          {:ended-by :provider-unavailable :unavailable? true
+                           :reason   :wall :retry-at "2026-04-21T16:40:00Z"})
+        (origined c "weather-4")
+        (comm/on-turn-end c "weather-4" {:ended-by :reply})
+        (origined c "weather-4")
+        (comm/on-turn-end c "weather-4"
+                          {:ended-by :provider-unavailable :unavailable? true
+                           :reason   :wall :retry-at "2026-04-21T18:00:00Z"})
+        (should= 2 (count @posted)))))
+
+  (it "posts a short notice naming the failure class on a hard error, never the raw message"
+    (let [posted (atom [])
+          c      (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [opts] (swap! posted conj opts) {:name "m1"})]
+        (origined c "boom-1")
+        (comm/on-turn-end c "boom-1"
+                          {:ended-by :error :error :exception
+                           :message  "secret-token-abc123 wire format mismatch"
+                           :ex-class "java.lang.Exception"})
+        (should= 1 (count @posted))
+        (should (re-find #"(?i)provider error" (:text (first @posted))))
+        (should-not (re-find #"secret-token" (:text (first @posted))))
+        (should-not (re-find #"wire format mismatch" (:text (first @posted)))))))
+
+  (it "classifies a tool exception as a tool failure"
+    (let [posted (atom [])
+          c      (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [opts] (swap! posted conj opts) {:name "m1"})]
+        (origined c "boom-2")
+        (comm/on-turn-end c "boom-2"
+                          {:ended-by :error :error :exception
+                           :ex-class "isaac.tool.ToolExecutionException"})
+        (should (re-find #"(?i)tool failure" (:text (first @posted)))))))
+
+  (it "logs once and does not retry when the notice itself fails to deliver"
+    (let [attempts (atom 0)
+          c        (comm-with slice)]
+      (log/capture-logs
+        (with-redefs [sut/access-token (constantly "at-1")
+                      chat-api/create-message! (fn [_] (swap! attempts inc) (throw (Exception. "network down")))]
+          (origined c "weather-5")
+          (comm/on-turn-end c "weather-5"
+                            {:ended-by :provider-unavailable :unavailable? true
+                             :reason   :wall :retry-at "2026-04-21T16:40:00Z"}))
+        (should= 1 @attempts)
+        (should= 1 (count (filter #(= :gchat.notice/failed (:event %)) @log/captured-logs))))))
+
+  )

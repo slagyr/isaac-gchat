@@ -166,3 +166,101 @@ Feature: Google Chat outbound
     And the log has entries matching:
       | level  | event                  | reason |
       | :debug | :gchat/message-dropped | :self  |
+
+  # What went wrong — isaac-h5v8. A turn the drive ends badly still gets an
+  # answer in the thread: never silence, never a stack trace or provider
+  # payload, never a token. Each scenario below gets its own space so the
+  # per-session park state one scenario leaves behind never leaks into the
+  # next (isaac.comm.gchat/parked-sessions lives for the process, not the
+  # scenario).
+
+  Scenario: a turn that errors gets a short in-thread notice naming the failure class
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/ERR1.name | errors |
+      | comms.gchat.gchat/spaces.spaces/ERR1.crew | main   |
+    And the Chat API returns message "spaces/ERR1/messages/10":
+      | sender.email        | ada@tonotop.com         |
+      | thread.name         | spaces/ERR1/threads/T10 |
+      | text                | @Isaac status?          |
+      | annotations.mention | users/yopp              |
+    And the following model responses are queued:
+      | model | type  | content                         |
+      | echo  | error | wire format mismatch: token xy9 |
+    When Google Chat delivers a message event for "spaces/ERR1/messages/10"
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/ERR1/messages" were made
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/ERR1/messages" matches:
+      | method           | POST                                                         |
+      | body.thread.name | spaces/ERR1/threads/T10                                      |
+      | body.text        | #"(?is)(?=.*provider error)(?!.*mismatch)(?!.*token xy9).*"  |
+
+  Scenario: a wall mid-turn gets one in-thread notice with the reason and retry time
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/WX1.name | wall-one |
+      | comms.gchat.gchat/spaces.spaces/WX1.crew | main     |
+    And the Chat API returns message "spaces/WX1/messages/20":
+      | sender.email        | ada@tonotop.com         |
+      | thread.name         | spaces/WX1/threads/T20  |
+      | text                | @Isaac status?          |
+      | annotations.mention | users/yopp              |
+    And the following model responses are queued:
+      | model | type       | status | retry-after |
+      | echo  | http-error | 429    | 60          |
+    When Google Chat delivers a message event for "spaces/WX1/messages/20"
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/WX1/messages" were made
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/WX1/messages" matches:
+      | method           | POST                                                                        |
+      | body.thread.name | spaces/WX1/threads/T20                                                     |
+      | body.text        | #"(?is).*out of tokens until \d{1,2}:\d{2}(am\|pm); i will answer then\..*" |
+
+  Scenario: after a park, the reply that follows posts no extra notice
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/WX2.name | wall-two |
+      | comms.gchat.gchat/spaces.spaces/WX2.crew | main     |
+    And the Chat API returns message "spaces/WX2/messages/30":
+      | sender.email        | ada@tonotop.com         |
+      | thread.name         | spaces/WX2/threads/T30  |
+      | text                | @Isaac status?          |
+      | annotations.mention | users/yopp              |
+    And the Chat API returns message "spaces/WX2/messages/31":
+      | sender.email        | ada@tonotop.com         |
+      | thread.name         | spaces/WX2/threads/T30  |
+      | text                | @Isaac still there?     |
+      | annotations.mention | users/yopp              |
+    And the following model responses are queued:
+      | model | type       | status | retry-after |
+      | echo  | http-error | 429    | 60          |
+    When Google Chat delivers a message event for "spaces/WX2/messages/30"
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/WX2/messages" were made
+    Given the following model responses are queued:
+      | model | type | content    |
+      | echo  | text | All clear. |
+    When Google Chat delivers a message event for "spaces/WX2/messages/31"
+    Then 2 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/WX2/messages" were made
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/WX2/messages" matches:
+      | #index    | 1          |
+      | body.text | All clear. |
+
+  Scenario: a second wall in the same park posts no second notice
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/WX3.name | wall-three |
+      | comms.gchat.gchat/spaces.spaces/WX3.crew | main       |
+    And the Chat API returns message "spaces/WX3/messages/40":
+      | sender.email        | ada@tonotop.com         |
+      | thread.name         | spaces/WX3/threads/T40  |
+      | text                | @Isaac status?          |
+      | annotations.mention | users/yopp              |
+    And the Chat API returns message "spaces/WX3/messages/41":
+      | sender.email        | ada@tonotop.com         |
+      | thread.name         | spaces/WX3/threads/T40  |
+      | text                | @Isaac still there?     |
+      | annotations.mention | users/yopp              |
+    And the following model responses are queued:
+      | model | type       | status | retry-after |
+      | echo  | http-error | 429    | 60          |
+    When Google Chat delivers a message event for "spaces/WX3/messages/40"
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/WX3/messages" were made
+    Given the following model responses are queued:
+      | model | type       | status | retry-after |
+      | echo  | http-error | 429    | 60          |
+    When Google Chat delivers a message event for "spaces/WX3/messages/41"
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/WX3/messages" were made
