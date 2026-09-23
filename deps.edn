@@ -64,7 +64,7 @@
                            marigold.longwave/marigold.longwave          {:git/url "https://github.com/slagyr/isaac-foundation.git"
                                                                         :git/sha "8fbeed3d99a0c372258efed5bbb2978c2554b906"
                                                                         :deps/root "modules/marigold.longwave"}}
-             :main-opts   ["-m" "gherclj.main"
+             :main-opts   ["-m" "isaac.features-main"
                            "-f" "features"
                            "-s" "isaac.**-steps"
                            "-t" "~slow"
