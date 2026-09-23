@@ -162,6 +162,14 @@
                          (and (seq domain) (= entry (str "domain:" domain))))))
                  allow)))))
 
+(defn- crew-name
+  "A crew id as the string the drive wants; nil when nothing was configured."
+  [c]
+  (cond (keyword? c) (name c)
+        (and (string? c) (seq c)) c))
+
+;; The routed crew is the space's own, else the comm's, else `:default-crew`
+;; in opts (the operator's defaults.crew - isaac-rfmh), else main.
 (defn decide
   "cfg + fetched Chat message → {:action :route ...} | {:action :drop :reason kw}.
    Pure but for the optional :resolve-person lookup in `opts`."
@@ -223,6 +231,7 @@
                             (some-> (canon/space-tag space) hash-set))
              :crew        (or (:crew entry)
                               (:crew cfg)
+                              (crew-name (:default-crew opts))
                               "main")
              :space-cfg   entry
              :dm?         direct?

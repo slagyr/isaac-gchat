@@ -35,6 +35,14 @@
 
 (describe "gchat inbound gate"
 
+  (it "routes to the operator's default crew when neither the space nor the comm names one (isaac-rfmh)"
+    (let [bare (assoc cfg :gchat/spaces {:spaces/ENG {:name "Engineering"}})]
+      (should= "yopp" (:crew (sut/decide bare (message) {:default-crew :yopp})))
+      (should= "yopp" (:crew (sut/decide bare (message) {:default-crew "yopp"})))
+      (should= "ops"  (:crew (sut/decide (assoc bare :crew "ops") (message) {:default-crew :yopp})))
+      (should= "main" (:crew (sut/decide cfg (message) {:default-crew :yopp})))
+      (should= "main" (:crew (sut/decide bare (message))))))
+
   (it "routes a mention in a configured space"
     (let [result (sut/decide cfg (message))]
       (should= :route (:action result))

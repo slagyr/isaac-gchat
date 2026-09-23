@@ -120,6 +120,23 @@
           (should= "gchat-yopp-test" (:session-key @dispatched))
           (should (some #(= :gchat/session-rename-failed (:event %)) @log/captured-logs))))))
 
+  (it "dispatches on the operator's defaults.crew when the space and the comm name none (isaac-rfmh)"
+    (let [dispatched (atom nil)
+          host       {:comms    {:gchat {:gchat/account    "yopp@tonotop.com"
+                                         :gchat/allow-from ["ada@tonotop.com"]}}
+                      :defaults {:crew :yopp}
+                      :google   {:tonotop {:topic "projects/marigold/topics/isaac"}}}]
+      (with-redefs [sut/-load-cfg         (fn [] (get-in host [:comms :gchat]))
+                    sut/full-config       (fn [] host)
+                    chat-api/get-message! (fn [_] mention-msg)
+                    lookup/space-info     (fn [_ _ _] {})
+                    api/get-session       (fn [_] nil)
+                    api/create-session!   (fn [id _] {:name id})
+                    api/dispatch!         (fn [req] (reset! dispatched req))]
+        (log/capture-logs
+          (sut/handle-event {:data {:message {:name "spaces/ENG/messages/1"}}})
+          (should= "yopp" (:crew @dispatched))))))
+
   (it "the session name says which organization's space it is, on a host with one"
     (let [created (atom nil)
           one-org {:comms  {:gchat {:gchat/account    "yopp@tonotop.com"
