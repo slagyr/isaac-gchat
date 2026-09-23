@@ -124,7 +124,7 @@
     (let [dispatched (atom nil)
           host       {:comms    {:gchat {:gchat/account    "yopp@tonotop.com"
                                          :gchat/allow-from ["ada@tonotop.com"]}}
-                      :defaults {:crew :yopp}
+                      :defaults {:frequencies {:crew :yopp}}
                       :google   {:tonotop {:topic "projects/marigold/topics/isaac"}}}]
       (with-redefs [sut/-load-cfg         (fn [] (get-in host [:comms :gchat]))
                     sut/full-config       (fn [] host)

@@ -12,6 +12,7 @@
     [isaac.comm.gchat.self :as self]
     [isaac.comm.gchat.transcript :as transcript]
     [isaac.comm.registry :as comm-registry]
+    [isaac.config.defaults :as defaults]
     [isaac.config.loader :as loader]
     [isaac.config.root :as root]
     [isaac.fs :as fs]
@@ -198,14 +199,15 @@
    comm speaks for — so self is never matched against another tenant's learned
    id (isaac-mm7o) and the session name says whose space it is — and what Chat
    calls the space, asked once per space and corrected by any newer name the
-   event itself carries (isaac-ihuc) - and the operator's defaults.crew, so a
-   space that names no crew runs as that default, not as main (isaac-rfmh)."
+   event itself carries (isaac-ihuc) - and the operator's default crew
+   ([:defaults :frequencies :crew]), so a space that names no crew runs as that
+   default, not as main (isaac-rfmh)."
   [full slice message]
   (let [id (tenants/of-comm full slice)]
     {:resolve-person people/resolve
      :account-user   (self/resolve-account-user id slice)
      :tenant         id
-     :default-crew   (get-in full [:defaults :crew])
+     :default-crew   (defaults/crew-id full)
      :space-info     (lookup/space-info id (gate/space-of message) (:space message))}))
 
 (defn- live-comm [cfg]
