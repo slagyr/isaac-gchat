@@ -112,6 +112,41 @@ Feature: Google Chat outbound
       | level | event            | class              |
       | :warn | :gchat/turn-notice | :delivery-failure |
 
+  Scenario: two threads in one DM each get their own reply, in their own thread (isaac-acou)
+    The session stays per DM (isaac-ihuc), so both threads share one
+    transcript; each reply still goes to the thread that addressed it, and
+    the transcript keeps each message's thread marked.
+    Given the Chat API returns message "spaces/DM2/messages/1":
+      | sender.email | ada@tonotop.com        |
+      | space.type   | DIRECT_MESSAGE         |
+      | thread.name  | spaces/DM2/threads/TA  |
+      | text         | did we ship yet?       |
+    And the Chat API returns message "spaces/DM2/messages/2":
+      | sender.email | ada@tonotop.com          |
+      | space.type   | DIRECT_MESSAGE           |
+      | thread.name  | spaces/DM2/threads/TB    |
+      | text         | are you free for lunch? |
+    And the following model responses are queued:
+      | model | type | content  |
+      | echo  | text | Not yet. |
+      | echo  | text | Yes.     |
+    When Google Chat delivers a message event for "spaces/DM2/messages/1"
+    And Google Chat delivers a message event for "spaces/DM2/messages/2"
+    Then session "gchat-tonotop-spaces-dm2" has transcript matching:
+      | type    | message.role | message.content                                              |
+      | message | user         | #"\[thread:TA\] ada@tonotop\.com: did we ship yet\?"         |
+      | message | assistant    | Not yet.                                                     |
+      | message | user         | #"\[thread:TB\] ada@tonotop\.com: are you free for lunch\?"  |
+      | message | assistant    | Yes.                                                          |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM2/messages" matches:
+      | #index           | 0                     |
+      | body.thread.name | spaces/DM2/threads/TA |
+      | body.text        | Not yet.              |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM2/messages" matches:
+      | #index           | 1                     |
+      | body.thread.name | spaces/DM2/threads/TB |
+      | body.text        | Yes.                  |
+
   Scenario: what Isaac sends does not come back as a turn
     Given the Chat API returns message "spaces/ENG/messages/1":
       | sender.email        | ada@tonotop.com       |

@@ -555,6 +555,54 @@ Feature: Google Chat inbound gate
     And Google Chat delivers a message event for "spaces/INV1/messages/2"
     Then exactly 1 log entry has event ":gchat.dm/invited"
 
+  Scenario: a mention in one thread keeps two threads' history straight, each line marked (isaac-acou)
+    The session stays per space (isaac-ihuc); a mention answers the thread
+    that addressed it, and every line — whichever thread it belongs to —
+    carries a [thread:xx] marker so Yopp can tell them apart.
+    Given the Chat API returns message "spaces/ENG/messages/40":
+      | sender.email | ada@tonotop.com       |
+      | thread.name  | spaces/ENG/threads/TA |
+      | text         | deploy started        |
+    And the Chat API returns message "spaces/ENG/messages/41":
+      | sender.email | ada@tonotop.com       |
+      | thread.name  | spaces/ENG/threads/TA |
+      | text         | build is green        |
+    And the Chat API returns message "spaces/ENG/messages/42":
+      | sender.email | ada@tonotop.com       |
+      | thread.name  | spaces/ENG/threads/TB |
+      | text         | anyone up for lunch?  |
+    And the Chat API returns message "spaces/ENG/messages/43":
+      | sender.email | ada@tonotop.com       |
+      | thread.name  | spaces/ENG/threads/TB |
+      | text         | tacos again?          |
+    And the Chat API returns message "spaces/ENG/messages/44":
+      | sender.email        | ada@tonotop.com        |
+      | thread.name         | spaces/ENG/threads/TA  |
+      | text                | @Isaac is it deployed? |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type | content   |
+      | echo  | text | Deployed. |
+    When Google Chat delivers a message event for "spaces/ENG/messages/40"
+    And Google Chat delivers a message event for "spaces/ENG/messages/41"
+    And Google Chat delivers a message event for "spaces/ENG/messages/42"
+    And Google Chat delivers a message event for "spaces/ENG/messages/43"
+    And Google Chat delivers a message event for "spaces/ENG/messages/44"
+    Then session "gchat-spaces-ENG" has transcript matching:
+      | type    | message.role | message.content                                                                                                                                                                        |
+      | message | user         | #"(?s)\[thread:TA\] ada@tonotop\.com: deploy started.*\[thread:TA\] ada@tonotop\.com: build is green.*\[thread:TB\] ada@tonotop\.com: anyone up for lunch\?.*\[thread:TB\] ada@tonotop\.com: tacos again\?.*\[thread:TA\] ada@tonotop\.com: @Isaac is it deployed\?" |
+      | message | assistant    | Deployed.                                                                                                                                                                              |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/ENG/messages" matches:
+      | body.thread.name | spaces/ENG/threads/TA |
+      | body.text        | Deployed.              |
+
+  Scenario: the gchat guidance frames the triggered turn exactly once (isaac-acou)
+    Given the following model responses are queued:
+      | model | type | content |
+      | echo  | text | On it.  |
+    When Google Chat delivers a message event for "spaces/ENG/messages/1"
+    Then the last LLM request carries the gchat thread guidance exactly once
+
   Scenario: an entry's explicit session overrides the canonical name (isaac-ihuc)
     Given config:
       | google.tonotop.topic                                | projects/marigold/topics/isaac |

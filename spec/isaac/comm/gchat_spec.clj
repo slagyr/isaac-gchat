@@ -4,8 +4,11 @@
     [isaac.comm.delivery.queue :as delivery-queue]
     [isaac.comm.gchat :as sut]
     [isaac.comm.gchat.chat-api :as chat-api]
+    [isaac.comm.gchat.transcript :as transcript]
     [isaac.comm.protocol :as comm]
+    [isaac.fs :as fs]
     [isaac.logger :as log]
+    [isaac.nexus :as nexus]
     [speclj.core :refer :all]))
 
 (defn- comm-with [slice]
@@ -73,6 +76,19 @@
         (should= "spaces/ENG" (:space @captured))
         (should= "spaces/ENG/threads/T1" (:thread @captured))
         (should= "All green." (:text @captured)))))
+
+  (it "on-reply marks the reply with the thread it went to, in the space transcript"
+    (nexus/-with-nested-nexus {:fs (fs/mem-fs) :root "/test/gchat-reply"}
+      (let [c (comm-with slice)]
+        (with-redefs [sut/access-token (constantly "at-1")
+                      chat-api/create-message! (fn [_] {:name "m1"})]
+          (comm/on-cycle-start c "gchat-spaces-ENG"
+                               {:origin {:kind :gchat :space "spaces/ENG" :thread "spaces/ENG/threads/T1"}})
+          (comm/on-reply c "gchat-spaces-ENG" "All green.")
+          (let [entry (last (transcript/recent "spaces/ENG"))]
+            (should= "spaces/ENG/threads/T1" (:thread entry))
+            (should= "All green." (:text entry))
+            (should (:self? entry)))))))
 
   (context "a DM the account is only invited to (isaac-qry7)"
 

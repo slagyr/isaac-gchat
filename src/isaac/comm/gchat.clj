@@ -10,6 +10,7 @@
     [isaac.comm.gchat.format :as fmt]
     [isaac.comm.gchat.target :as target]
     [isaac.comm.gchat.tenant :as tenant]
+    [isaac.comm.gchat.transcript :as transcript]
     [isaac.comm.protocol :as comm]
     [isaac.config.loader :as loader]
     [isaac.config.root :as root]
@@ -138,13 +139,25 @@
           (log/error :gchat/delivery-failed :space space :thread thread :status status :reason reason)
           failure)))))
 
+(defn- note-own-reply!
+  "Yopp's own reply gets the same thread marker every other line in the
+   space's transcript carries (isaac-acou) — only once it actually posted;
+   a diverted or failed reply never reached the thread."
+  [comm origin text]
+  (transcript/append! (:space origin)
+                      (transcript/entry {:sender (:gchat/account (slice comm))
+                                         :text   text
+                                         :thread (:thread origin)
+                                         :self?  true})))
+
 (defn- on-reply* [comm session-key text]
   (when-let [origin (get @origin-by-session session-key)]
     (when (seq (str/trim (str text)))
       (if (:invited? origin)
         (divert-reply! origin text)
-        (when-let [failure (reply! comm origin text)]
-          (swap! delivery-failures* assoc session-key (assoc failure :class :delivery-failure)))))))
+        (if-let [failure (reply! comm origin text)]
+          (swap! delivery-failures* assoc session-key (assoc failure :class :delivery-failure))
+          (note-own-reply! comm origin text))))))
 
 (defn- on-turn-end* [_comm session-key _result]
   (when-let [{:keys [space thread status reason class]} (get @delivery-failures* session-key)]

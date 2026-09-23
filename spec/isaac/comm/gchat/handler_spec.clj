@@ -2,6 +2,7 @@
   (:require
     [isaac.api :as api]
     [isaac.comm.gchat.chat-api :as chat-api]
+    [isaac.comm.gchat.guidance :as guidance]
     [isaac.comm.gchat.handler :as sut]
     [isaac.comm.gchat.lookup :as lookup]
     [isaac.logger :as log]
@@ -36,6 +37,20 @@
           (sut/handle-event {:data {:message {:name "spaces/ENG/messages/1"}}})
           (should= "gchat-spaces-eng" (:session-key @dispatched))
           (should (some #(= :gchat/message-routed (:event %)) @log/captured-logs))))))
+
+  (it "marks the input with the message's thread and carries the standing guidance"
+    (let [dispatched (atom nil)]
+      (with-redefs [sut/-load-cfg         (fn [] (get-in cfg [:comms :gchat]))
+                    lookup/space-info     (fn [_ _ _] {})
+                    chat-api/get-message! (fn [_] mention-msg)
+                    api/get-session       (fn [_] nil)
+                    api/create-session!   (fn [id _] {:name id})
+                    api/dispatch!         (fn [req] (reset! dispatched req))]
+        (log/capture-logs
+          (sut/handle-event {:data {:message {:name "spaces/ENG/messages/1"}}})
+          (should= "[thread:T1] ada@tonotop.com: @Isaac can you look at the deploy?"
+                   (:input @dispatched))
+          (should= guidance/TEXT (:guidance @dispatched))))))
 
   (it "does not dispatch when the gate drops"
     (let [dispatched (atom false)]

@@ -9,6 +9,7 @@
     [isaac.comm.factory :as comm-factory]
     [isaac.comm.gchat :as gchat]
     [isaac.comm.gchat.chat-api :as chat-api]
+    [isaac.comm.gchat.guidance :as guidance]
     [isaac.comm.gchat.handler :as handler]
     [isaac.comm.gchat.lookup :as gchat-lookup]
     [isaac.comm.gchat.self :as gchat-self]
@@ -340,6 +341,16 @@
         hits  (filter #(= event (:event %)) (log/get-entries))]
     (g/should= n (count hits))))
 
+(defn last-llm-request-carries-guidance-once
+  "The standing thread guidance (isaac-acou) rides the charge's :guidance,
+   which the prompt builder frames into the current user turn once. Grover's
+   last request is the built prompt, so counting the guidance text's
+   occurrences there proves it was attached, and attached exactly once."
+  []
+  (let [text (some-> (grover/last-request) pr-str)]
+    (g/should text)
+    (g/should= 1 (count (re-seq (re-pattern (java.util.regex.Pattern/quote guidance/TEXT)) text)))))
+
 (defn session-origin-matches
   "The session's :origin, field by field, as the table names them."
   [key table]
@@ -439,3 +450,6 @@
 
 (defthen #"session \"([^\"]+)\" has origin:"
   isaac.gchat-steps/session-origin-matches)
+
+(defthen "the last LLM request carries the gchat thread guidance exactly once"
+  isaac.gchat-steps/last-llm-request-carries-guidance-once)

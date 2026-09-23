@@ -7,6 +7,7 @@
     [isaac.comm.gchat.canon :as canon]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.gate :as gate]
+    [isaac.comm.gchat.guidance :as guidance]
     [isaac.comm.gchat.lookup :as lookup]
     [isaac.comm.gchat.self :as self]
     [isaac.comm.gchat.transcript :as transcript]
@@ -219,21 +220,20 @@
 
 (def CONTEXT-END "[End chat context]")
 
-(defn- context-line [{:keys [sender text]}]
-  (str (or sender "someone") ": " (str/trim (str text))))
-
 (defn- framed-input
   "The turn's input: what the space said since Isaac last spoke, framed as
    history, then the message that named him. Unframed history in the user
-   role reads as a fresh request — the isaac-8l2u lesson (isaac-iv5c)."
+   role reads as a fresh request — the isaac-8l2u lesson (isaac-iv5c). Every
+   line — history and current alike — carries its thread marker, so Yopp can
+   group them by thread (isaac-acou)."
   [decision]
-  (let [current (str (:sender decision) ": " (:text decision))
+  (let [current (canon/rendered-line decision)
         history (transcript/since-reply (:space decision))]
     (if (empty? history)
       current
       (str/join "\n"
                 (concat [CONTEXT-PREAMBLE CONTEXT-CONTRACT ""]
-                        (map context-line history)
+                        (map canon/rendered-line history)
                         ["" CONTEXT-END "" current])))))
 
 (defn- dispatch-to! [decision session-key input ch]
@@ -241,7 +241,8 @@
                           :input       input
                           :origin      (origin decision)
                           :crew        (:crew decision)
-                          :config      (full-config)}
+                          :config      (full-config)
+                          :guidance    guidance/TEXT}
                    ch (assoc :comm ch))))
 
 (defn- dispatch! [decision]

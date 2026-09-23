@@ -18,6 +18,26 @@
     (should= :space:AAQA7rg5Uyc (sut/space-tag "spaces/AAQA7rg5Uyc"))
     (should-be-nil (sut/space-tag "")))
 
+  (it "the thread id is the resource's last part, case and all"
+    (should= "T1" (sut/thread-id "spaces/ENG/threads/T1"))
+    (should= "mtEwy7PEiSs" (sut/thread-id "spaces/ENG/threads/mtEwy7PEiSs"))
+    (should= "bare" (sut/thread-id "bare")))
+
+  (it "the marker keeps only the tail of a long thread id"
+    (should= "T1" (sut/thread-short "spaces/ENG/threads/T1"))
+    (should= "wy7PEiSs" (sut/thread-short "spaces/ENG/threads/mtEwy7PEiSs"))
+    (should= "[thread:T1]" (sut/thread-marker "spaces/ENG/threads/T1"))
+    (should-be-nil (sut/thread-marker nil))
+    (should-be-nil (sut/thread-marker "")))
+
+  (it "a rendered line carries the marker ahead of who spoke"
+    (should= "[thread:T1] Ada Lovelace: hi there"
+             (sut/rendered-line {:thread "spaces/ENG/threads/T1" :sender "Ada Lovelace" :text "hi there"}))
+    (should= "someone: "
+             (sut/rendered-line {:sender nil :text nil}))
+    (should= "Yopp: on it"
+             (sut/rendered-line {:sender "Yopp" :text "on it"})))
+
   (it "a named space is named for its display name"
     (should= "gchat-yopp-test"
              (sut/canonical-name {:space "spaces/AAQA7rg5Uyc" :display-name "Yopp Test"})))
