@@ -1,5 +1,5 @@
 {:id          :isaac.comm.gchat
- :version     "0.2.3"
+ :version     "0.2.4"
  :builtin?    true
  :factory     isaac.comm.gchat.module/create-module
  :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
@@ -77,5 +77,8 @@
  :isaac.google/scopes
  ["https://www.googleapis.com/auth/chat.messages"
   "https://www.googleapis.com/auth/chat.spaces.readonly"
-  "https://www.googleapis.com/auth/chat.memberships.readonly"]
+  "https://www.googleapis.com/auth/chat.memberships.readonly"
+  ;; chat.spaces.create: spaces:setup — Yopp opens a DM to a person, and joins
+  ;; a DM it was only invited to (message request pending, yopp 2026-09-23).
+  "https://www.googleapis.com/auth/chat.spaces.create"]
  }
