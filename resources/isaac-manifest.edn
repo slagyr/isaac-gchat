@@ -1,5 +1,5 @@
 {:id          :isaac.comm.gchat
- :version     "0.2.5"
+ :version     "0.2.6"
  :builtin?    true
  :factory     isaac.comm.gchat.module/create-module
  :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
@@ -80,8 +80,9 @@
   "https://www.googleapis.com/auth/chat.memberships.readonly"
   ;; chat.spaces.create: spaces:setup — Yopp opens a DM to a person, and joins
   ;; a DM it was only invited to (message request pending, yopp 2026-09-23).
-  "https://www.googleapis.com/auth/chat.spaces.create"
-  ;; chat.memberships (write): members.create for the account's own membership —
-  ;; accepting a chat request programmatically (isaac-qry7).
-  "https://www.googleapis.com/auth/chat.memberships"]
+  ;;
+  ;; chat.memberships (write) was here to accept a chat request programmatically
+  ;; (isaac-qry7) but no Chat API accepts a DM request: members.create on a
+  ;; human DM answers 400. Dropped in 0.2.6 (isaac-h3yh).
+  "https://www.googleapis.com/auth/chat.spaces.create"]
  }
