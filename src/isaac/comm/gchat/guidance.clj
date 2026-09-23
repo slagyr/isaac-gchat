@@ -14,4 +14,6 @@
        "The message that addressed you names the thread you are answering. Build your "
        "context from that thread first — other threads in this space are separate "
        "conversations; use them only if the current thread refers to them. Reply in "
-       "the addressed thread."))
+       "the addressed thread. If asked what you did or how you know something, "
+       "summarise the tools you used from the transcript in plain words; otherwise "
+       "never include a trace or list of tools in your reply."))

@@ -23,6 +23,15 @@
 (defonce ^:private origin-by-session (atom {}))
 (defonce ^:private delivery-failures* (atom {}))
 
+;; Reactions on the triggering message show Yopp's progress — 👀 working, ✅
+;; answered, ⚠️ failed, ⏳ parked — instead of a status post (isaac-1bq1).
+;; Chat lets a user add/remove reactions and neither notifies. Keyed by
+;; session-key: {:message <resource name> :reaction <resource name> :emoji
+;; <glyph> :kind :working|:done|:failed|:parked}. Persists across the
+;; origin-by-session dissoc at turn-end so a park's ⏳ survives until the
+;; turn that actually answers.
+(defonce ^:private reaction-state* (atom {}))
+
 (defn- slice [comm]
   (or @(.-cfg comm) {}))
 
@@ -74,10 +83,92 @@
       (log/error :gchat.send/failed :error (.getMessage e))
       {:ok false :transient? true :error (.getMessage e)})))
 
-(defn- on-cycle-start* [_comm session-key cycle]
+;; region ----- Progress reactions (isaac-1bq1) -----
+
+(def default-reactions
+  {:working "👀" :done "✅" :failed "⚠️" :parked "⏳"})
+
+(defn- reactions-cfg
+  "The configured reaction glyphs, defaults merged in - or nil when
+   `gchat/reactions false` turns the whole lifecycle off."
+  [cfg]
+  (let [v (:gchat/reactions cfg)]
+    (cond
+      (false? v) nil
+      (map? v)   (merge default-reactions v)
+      :else      default-reactions)))
+
+(defn- reaction-state [session-key]
+  (get @reaction-state* session-key))
+
+(defn- reaction-remove!
+  "Delete the session's current reaction, if any. A failure is logged once
+   at debug and never retried or surfaced as a turn error (isaac-1bq1)."
+  [comm session-key]
+  (when-let [{:keys [reaction message emoji]} (reaction-state session-key)]
+    (try
+      (chat-api/delete-reaction! {:reaction reaction :token (access-token (slice comm))})
+      (catch Exception e
+        (log/debug :gchat.reaction/failed :message message :emoji emoji :status (:status (ex-data e)))))
+    (swap! reaction-state* dissoc session-key)))
+
+(defn- reaction-add!
+  "Add a reaction to `message`, remembering its resource name for the later
+   remove. A failure is logged once at debug and never retried."
+  [comm session-key message kind emoji]
+  (try
+    (let [resp (chat-api/create-reaction! {:message message :emoji emoji :token (access-token (slice comm))})]
+      (swap! reaction-state* assoc session-key {:message message :reaction (:name resp) :emoji emoji :kind kind}))
+    (catch Exception e
+      (log/debug :gchat.reaction/failed :message message :emoji emoji :status (:status (ex-data e))))))
+
+(defn- set-reaction!
+  "Remove-then-add for every change - there is no reaction update (isaac-1bq1)."
+  [comm session-key message kind emoji]
+  (reaction-remove! comm session-key)
+  (reaction-add! comm session-key message kind emoji))
+
+(defn- reaction-working!
+  "👀 on the triggering message, once per turn - the first cycle. A turn
+   that resumes the same still-parked message (⏳) is left alone: the parked
+   glyph is kept until the resumed reply lands, not flickered back to 👀."
+  [comm session-key origin]
+  (when-let [reactions (reactions-cfg (slice comm))]
+    (when-let [message (:message origin)]
+      (let [state (reaction-state session-key)]
+        (when-not (and (= :parked (:kind state)) (= message (:message state)))
+          (set-reaction! comm session-key message :working (:working reactions)))))))
+
+(defn- reaction-done!
+  "✅ once the turn's answer has posted (or diverted) - the reaction the
+   parked ⏳ is kept for."
+  [comm session-key origin]
+  (when-let [reactions (reactions-cfg (slice comm))]
+    (when-let [message (:message origin)]
+      (set-reaction! comm session-key message :done (:done reactions)))))
+
+(defn- reaction-failed!
+  "⚠️ on a hard turn error."
+  [comm session-key origin]
+  (when-let [reactions (reactions-cfg (slice comm))]
+    (when-let [message (:message origin)]
+      (set-reaction! comm session-key message :failed (:failed reactions)))))
+
+(defn- reaction-parked!
+  "⏳ on provider weather - kept until the resumed reply lands, then ✅."
+  [comm session-key origin]
+  (when-let [reactions (reactions-cfg (slice comm))]
+    (when-let [message (:message origin)]
+      (set-reaction! comm session-key message :parked (:parked reactions)))))
+
+;; endregion ^^^^^ Progress reactions ^^^^^
+
+(defn- on-cycle-start* [comm session-key cycle]
   (when-let [origin (:origin cycle)]
     (when (= :gchat (:kind origin))
-      (swap! origin-by-session assoc session-key origin))))
+      (swap! origin-by-session assoc session-key origin)
+      (when (= 1 (:n cycle))
+        (reaction-working! comm session-key origin)))))
 
 (defn -full-cfg
   "The whole process config, not just this comm's slice - needed to read
@@ -157,10 +248,12 @@
   (when-let [origin (get @origin-by-session session-key)]
     (when (seq (str/trim (str text)))
       (if (:invited? origin)
-        (divert-reply! origin text)
+        (do (divert-reply! origin text)
+            (reaction-done! comm session-key origin))
         (if-let [failure (reply! comm origin text)]
           (swap! delivery-failures* assoc session-key (assoc failure :class :delivery-failure))
-          (note-own-reply! comm origin text))))))
+          (do (note-own-reply! comm origin text)
+              (reaction-done! comm session-key origin)))))))
 
 ;; What went wrong — isaac-h5v8. The drive never ends a turn silently: an
 ;; ordinary failure carries :ended-by :error, and provider weather (rate
@@ -249,10 +342,14 @@
       (weather-result? result)
       (when-not (contains? @parked-sessions session-key)
         (swap! parked-sessions conj session-key)
+        (when-let [origin (get @origin-by-session session-key)]
+          (reaction-parked! comm session-key origin))
         (post-notice! comm session-key (weather-notice-text result)))
 
       (error-result? result)
       (do (swap! parked-sessions disj session-key)
+          (when-let [origin (get @origin-by-session session-key)]
+            (reaction-failed! comm session-key origin))
           (post-notice! comm session-key (error-notice-text result)))
 
       :else

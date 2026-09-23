@@ -9,4 +9,9 @@
     (should (string? sut/TEXT))
     (should (re-find #"thread" sut/TEXT))
     (should (re-find #"addressed thread" sut/TEXT)))
+
+  (it "tells Yopp to summarise tools used in plain words when asked, and never trace otherwise (isaac-1bq1)"
+    (should (re-find #"(?i)what you did" sut/TEXT))
+    (should (re-find #"(?i)tools you used" sut/TEXT))
+    (should (re-find #"(?i)never include a trace" sut/TEXT)))
   )

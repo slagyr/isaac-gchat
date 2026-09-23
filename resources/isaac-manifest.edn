@@ -1,5 +1,5 @@
 {:id          :isaac.comm.gchat
- :version     "0.2.9"
+ :version     "0.2.10"
  :builtin?    true
  :factory     isaac.comm.gchat.module/create-module
  :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
@@ -17,6 +17,12 @@
                                              :description "Inbound allowlist of senders: an email, *@domain for every address in a domain, a users/<id> resource name, or domain:<domainId> (the Workspace customer id Chat reports as sender.domainId). Chat's message API does not return emails for human senders under user auth, so users/… or domain:… is usually what you want. Missing or empty = fail-closed; a drop logs the sender's identity so it can be copied in."}
                          :gchat/message-cap {:type        :int
                                              :description "Chunk reply text above this character count. Chat's limit is 4096; default 4096."}
+                         :gchat/reactions   {:type        :one-of
+                                             :specs       [{:type :boolean}
+                                                           {:type       :map
+                                                            :key-spec   {:type :keyword}
+                                                            :value-spec {:type :string}}]
+                                             :description "Reaction glyphs shown on the triggering Chat message as Yopp works — 👀 while a turn is in flight, ✅ once it answers, ⚠️ on a hard error, ⏳ while parked on provider weather. A map overrides any of :working/:done/:failed/:parked over the default {:working \"👀\" :done \"✅\" :failed \"⚠️\" :parked \"⏳\"}; false turns the whole lifecycle off. Reactions never notify (isaac-1bq1)."}
                          :gchat/spaces      {:type        :map
                                              :key-spec    {:type :keyword}
                                              :value-spec  {:type   :map

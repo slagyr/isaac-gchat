@@ -49,16 +49,19 @@
    Google gave it — users/<id> never changes, a display name does — so a
    transcript can still say who spoke after a rename (isaac-bklu). :invited?
    rides along when the space is a DM Chat never auto-accepted (isaac-qry7),
-   so the comm's on-reply can divert the reply instead of posting a 403."
+   so the comm's on-reply can divert the reply instead of posting a 403.
+   :message is the triggering Chat message's own resource name — the comm's
+   reaction lifecycle targets exactly that message (isaac-1bq1)."
   [decision]
   (let [{:keys [user display-name email]} (:identity decision)]
     (cond-> {:kind   :gchat
              :space  (:space decision)
              :thread (:thread decision)}
-      (seq (str (or user "")))         (assoc :user user)
-      (seq (str (or display-name ""))) (assoc :display-name display-name)
-      (seq (str (or email "")))        (assoc :email email)
-      (:invited? decision)             (assoc :invited? true))))
+      (seq (str (or user "")))                       (assoc :user user)
+      (seq (str (or display-name "")))               (assoc :display-name display-name)
+      (seq (str (or email "")))                      (assoc :email email)
+      (:invited? decision)                           (assoc :invited? true)
+      (seq (str (or (:message-name decision) "")))   (assoc :message (:message-name decision)))))
 
 (defn- ensure-session! [decision session-key]
   (or (api/get-session session-key)
@@ -273,7 +276,7 @@
         (let [message  (chat-api/get-message! name)
               slice    (-load-cfg)
               opts     (decide-opts (full-config) slice message)
-              decision (cond-> (gate/decide slice message opts)
+              decision (cond-> (assoc (gate/decide slice message opts) :message-name (:name message))
                          (get-in opts [:space-info :invited?]) (assoc :invited? true))]
           (cond
             (= :log (:action decision))

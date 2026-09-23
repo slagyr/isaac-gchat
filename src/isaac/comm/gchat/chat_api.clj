@@ -90,6 +90,34 @@
       (throw (ex-info (str "Chat API create failed: " (:status resp))
                       {:status (:status resp) :body (:body resp) :space space})))))
 
+(defn create-reaction!
+  "POST spaces.messages.reactions.create — react to the triggering message with
+   an emoji. Chat lets a user add and remove reactions and neither notifies
+   (isaac-1bq1). Returns the body, which carries the reaction's own :name for
+   the later delete-reaction!."
+  [{:keys [message emoji token]}]
+  (let [resp (-http! {:method  "POST"
+                      :url     (str chat-base "/" message "/reactions")
+                      :headers {"Authorization" (str "Bearer " token)
+                                "Content-Type"  "application/json"}
+                      :body    {:emoji {:unicode emoji}}})]
+    (if (<= 200 (:status resp) 299)
+      (:body resp)
+      (throw (ex-info (str "Chat API reactions.create failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :message message})))))
+
+(defn delete-reaction!
+  "DELETE spaces.messages.reactions.delete — remove a reaction by its own
+   resource name (as returned by create-reaction!)."
+  [{:keys [reaction token]}]
+  (let [resp (-http! {:method  "DELETE"
+                      :url     (str chat-base "/" reaction)
+                      :headers {"Authorization" (str "Bearer " token)}})]
+    (if (<= 200 (:status resp) 299)
+      (:body resp)
+      (throw (ex-info (str "Chat API reactions.delete failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :reaction reaction})))))
+
 (defn find-direct-message!
   "GET spaces:findDirectMessage?name=users/<email>. Nil on 404."
   [email token]

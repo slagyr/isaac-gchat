@@ -193,6 +193,16 @@
         stub (g/get :gchat-http-stub)
         url  (:url req')]
     (cond
+      ;; reactions.create — Chat's :name is a relative resource path (never a
+      ;; full URL); the stub's is deterministic (the message plus "/1") so a
+      ;; scenario can predict the reactions.delete URL that follows.
+      (and (str/ends-with? (str url) "/reactions") (= "POST" (:method req')))
+      {:status 200 :body {:name (str (str/replace-first (str url) "https://chat.googleapis.com/v1/" "") "/1")}}
+
+      ;; reactions.delete — DELETE on the reaction's own resource name.
+      (re-find #"/reactions/\d+$" (str url))
+      {:status 200 :body {}}
+
       (and stub (= url "https://chat.googleapis.com/v1/spaces:findDirectMessage")
            (:no-dm stub))
       {:status 404 :body {}}
@@ -259,6 +269,13 @@
   (let [n    (if (string? n) (parse-long n) n)
         reqs (or (g/get :outbound-http-requests) [])]
     (g/should= n (count (filter #(= url (:url %)) reqs)))))
+
+(defn no-reaction-calls-were-made
+  "No reactions.create or reactions.delete request went out - the heard-only
+   and reactions-disabled cases (isaac-1bq1)."
+  []
+  (let [reqs (or (g/get :outbound-http-requests) [])]
+    (g/should-not (some #(str/includes? (str (:url %)) "/reactions") reqs))))
 
 (defn session-is-tagged [key tag]
   (let [session (api/get-session key)]
@@ -417,6 +434,9 @@
 
 (defthen #"^(\d+) outbound HTTP requests? to \"([^\"]+)\" (?:was|were) made$"
   isaac.gchat-steps/outbound-http-count)
+
+(defthen "no reaction calls were made"
+  isaac.gchat-steps/no-reaction-calls-were-made)
 
 (defgiven "gchat outbound comm is registered"
   isaac.gchat-steps/gchat-outbound-comm-registered)

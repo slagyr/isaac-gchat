@@ -262,6 +262,126 @@
                            :ex-class "isaac.tool.ToolExecutionException"})
         (should (re-find #"(?i)tool failure" (:text (first @posted)))))))
 
+  )
+
+(defn- origined-msg [c session-key message]
+  (comm/on-cycle-start c session-key
+                       {:n 1 :origin {:kind :gchat :space "spaces/ENG" :thread "spaces/ENG/threads/T1"
+                                     :message message}}))
+
+(describe "gchat comm progress reactions (isaac-1bq1)"
+
+  (it "adds the working glyph to the triggering message on the first cycle"
+    (let [created (atom nil)
+          c       (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-reaction! (fn [opts] (reset! created opts) {:name "spaces/ENG/messages/1/reactions/1"})]
+        (origined-msg c "reaction-working-1" "spaces/ENG/messages/1")
+        (should= "spaces/ENG/messages/1" (:message @created))
+        (should= "👀" (:emoji @created)))))
+
+  (it "does not add a second working reaction on a later cycle of the same turn"
+    (let [calls (atom 0)
+          c     (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-reaction! (fn [_] (swap! calls inc) {:name "r1"})]
+        (comm/on-cycle-start c "reaction-cycle-1"
+                             {:n 1 :origin {:kind :gchat :space "spaces/ENG" :thread "spaces/ENG/threads/T1"
+                                           :message "spaces/ENG/messages/1"}})
+        (comm/on-cycle-start c "reaction-cycle-1"
+                             {:n 2 :origin {:kind :gchat :space "spaces/ENG" :thread "spaces/ENG/threads/T1"
+                                           :message "spaces/ENG/messages/1"}})
+        (should= 1 @calls))))
+
+  (it "removes the working reaction and adds done once the reply posts"
+    (let [reactions (atom [])
+          c         (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-message!  (fn [_] {:name "m1"})
+                    chat-api/create-reaction! (fn [opts]
+                                                (swap! reactions conj [:create opts])
+                                                {:name "spaces/ENG/messages/1/reactions/1"})
+                    chat-api/delete-reaction! (fn [opts] (swap! reactions conj [:delete opts]))]
+        (origined-msg c "reaction-done-1" "spaces/ENG/messages/1")
+        (comm/on-reply c "reaction-done-1" "All green.")
+        (should= [:create :delete :create] (mapv first @reactions))
+        (should= "👀" (get-in @reactions [0 1 :emoji]))
+        (should= "spaces/ENG/messages/1/reactions/1" (get-in @reactions [1 1 :reaction]))
+        (should= "✅" (get-in @reactions [2 1 :emoji])))))
+
+  (it "removes working and adds failed when the turn ends in error"
+    (let [reactions (atom [])
+          c         (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-message!  (fn [_] {:name "m1"})
+                    chat-api/create-reaction! (fn [opts]
+                                                (swap! reactions conj [:create opts])
+                                                {:name "r1"})
+                    chat-api/delete-reaction! (fn [opts] (swap! reactions conj [:delete opts]))]
+        (origined-msg c "reaction-failed-1" "spaces/ENG/messages/1")
+        (comm/on-turn-end c "reaction-failed-1" {:ended-by :error :ex-class "java.lang.Exception"})
+        (should= [:create :delete :create] (mapv first @reactions))
+        (should= "⚠️" (get-in @reactions [2 1 :emoji])))))
+
+  (it "keeps the parked glyph through a same-message resume, then done on the reply"
+    (let [reactions (atom [])
+          c         (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-message!  (fn [_] {:name "m1"})
+                    chat-api/create-reaction! (fn [opts]
+                                                (swap! reactions conj [:create opts])
+                                                {:name "r1"})
+                    chat-api/delete-reaction! (fn [opts] (swap! reactions conj [:delete opts]))]
+        (origined-msg c "reaction-parked-1" "spaces/ENG/messages/1")
+        (comm/on-turn-end c "reaction-parked-1"
+                          {:ended-by :provider-unavailable :unavailable? true :reason :wall
+                           :retry-at "2026-04-21T16:40:00Z"})
+        (should= [:create :delete :create] (mapv first @reactions))
+        (should= "⏳" (get-in @reactions [2 1 :emoji]))
+        ;; the same message resumes - no flicker back to working
+        (origined-msg c "reaction-parked-1" "spaces/ENG/messages/1")
+        (should= 3 (count @reactions))
+        (comm/on-reply c "reaction-parked-1" "All clear.")
+        (should= [:create :delete :create :delete :create] (mapv first @reactions))
+        (should= "✅" (get-in @reactions [4 1 :emoji])))))
+
+  (it "makes no reaction calls when gchat/reactions is false"
+    (let [calls (atom 0)
+          c     (comm-with (assoc slice :gchat/reactions false))]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-message!  (fn [_] {:name "m1"})
+                    chat-api/create-reaction! (fn [_] (swap! calls inc) {:name "r1"})
+                    chat-api/delete-reaction! (fn [_] (swap! calls inc))]
+        (origined-msg c "gchat-reactions-off" "spaces/ENG/messages/1")
+        (comm/on-reply c "gchat-reactions-off" "All green.")
+        (comm/on-turn-end c "gchat-reactions-off" {:ended-by :reply})
+        (should= 0 @calls))))
+
+  (it "honors a configured override, merged over the other defaults"
+    (let [created (atom nil)
+          c       (comm-with (assoc slice :gchat/reactions {:working "🚀"}))]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-reaction! (fn [opts] (reset! created opts) {:name "r1"})]
+        (origined-msg c "reaction-override-1" "spaces/ENG/messages/1")
+        (should= "🚀" (:emoji @created)))))
+
+  (it "logs once at debug and never throws when the Chat API refuses a reaction"
+    (let [c (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-reaction! (fn [_] (throw (ex-info "Chat API reactions.create failed: 403"
+                                                                      {:status 403})))]
+        (log/capture-logs
+          (origined-msg c "reaction-fail-log-1" "spaces/ENG/messages/1")
+          (let [entry (first (filter #(= :gchat.reaction/failed (:event %)) @log/captured-logs))]
+            (should-not-be-nil entry)
+            (should= :debug (:level entry))
+            (should= "spaces/ENG/messages/1" (:message entry))
+            (should= 403 (:status entry)))))))
+
+  )
+
+(describe "gchat comm on-turn-end — reactions unrelated to what went wrong"
+
   (it "logs once and does not retry when the notice itself fails to deliver"
     (let [attempts (atom 0)
           c        (comm-with slice)]

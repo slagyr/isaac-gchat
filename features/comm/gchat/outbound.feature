@@ -264,3 +264,116 @@ Feature: Google Chat outbound
       | echo  | http-error | 429    | 60          |
     When Google Chat delivers a message event for "spaces/WX3/messages/41"
     Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/WX3/messages" were made
+
+  # Reactions on the triggering message show progress instead of a status
+  # post — 👀 working, ✅ answered, ⚠️ failed, ⏳ parked (isaac-1bq1). Chat lets
+  # a user add and remove reactions and neither notifies. Each scenario below
+  # gets its own space so the per-session reaction state (isaac.comm.gchat/
+  # reaction-state*) one scenario leaves behind never leaks into the next.
+
+  Scenario: an addressed message gets a working reaction, then done once the reply posts (isaac-1bq1)
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/RX1.name | reactions-one |
+      | comms.gchat.gchat/spaces.spaces/RX1.crew | main          |
+    And the Chat API returns message "spaces/RX1/messages/1":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/RX1/threads/T1 |
+      | text                | @Isaac status?        |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type | content    |
+      | echo  | text | All green. |
+    When Google Chat delivers a message event for "spaces/RX1/messages/1"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX1/messages/1/reactions" matches:
+      | #index             | 0    |
+      | method              | POST |
+      | body.emoji.unicode  | 👀   |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX1/messages/1/reactions/1" matches:
+      | method | DELETE |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX1/messages/1/reactions" matches:
+      | #index             | 1    |
+      | method              | POST |
+      | body.emoji.unicode  | ✅   |
+    And 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/RX1/messages/1/reactions/1" were made
+
+  Scenario: an error turn gets a working reaction, then failed, alongside the h5v8 in-thread notice (isaac-1bq1)
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/RX2.name | reactions-two |
+      | comms.gchat.gchat/spaces.spaces/RX2.crew | main          |
+    And the Chat API returns message "spaces/RX2/messages/1":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/RX2/threads/T1 |
+      | text                | @Isaac status?        |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type  | content                         |
+      | echo  | error | wire format mismatch: token xy9 |
+    When Google Chat delivers a message event for "spaces/RX2/messages/1"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX2/messages/1/reactions" matches:
+      | #index             | 0  |
+      | body.emoji.unicode | 👀 |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX2/messages/1/reactions" matches:
+      | #index             | 1  |
+      | body.emoji.unicode | ⚠️ |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX2/messages" matches:
+      | body.text | #"(?is)(?=.*provider error).*" |
+
+  Scenario: a parked turn shows the parked reaction until the reply that follows answers (isaac-1bq1)
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/RX3.name | reactions-three |
+      | comms.gchat.gchat/spaces.spaces/RX3.crew | main            |
+    And the Chat API returns message "spaces/RX3/messages/1":
+      | sender.email        | ada@tonotop.com         |
+      | thread.name         | spaces/RX3/threads/T1   |
+      | text                | @Isaac status?          |
+      | annotations.mention | users/yopp              |
+    And the Chat API returns message "spaces/RX3/messages/2":
+      | sender.email        | ada@tonotop.com         |
+      | thread.name         | spaces/RX3/threads/T1   |
+      | text                | @Isaac still there?     |
+      | annotations.mention | users/yopp              |
+    And the following model responses are queued:
+      | model | type       | status | retry-after |
+      | echo  | http-error | 429    | 60          |
+    When Google Chat delivers a message event for "spaces/RX3/messages/1"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX3/messages/1/reactions" matches:
+      | #index             | 1  |
+      | body.emoji.unicode | ⏳ |
+    And 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/RX3/messages" were made
+    Given the following model responses are queued:
+      | model | type | content    |
+      | echo  | text | All clear. |
+    When Google Chat delivers a message event for "spaces/RX3/messages/2"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX3/messages/2/reactions" matches:
+      | #index             | 1  |
+      | body.emoji.unicode | ✅ |
+    And 2 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/RX3/messages" were made
+
+  Scenario: a message Isaac only heard, not addressed, gets no reaction (isaac-1bq1)
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/RX4.name | reactions-four |
+      | comms.gchat.gchat/spaces.spaces/RX4.crew | main           |
+    And the Chat API returns message "spaces/RX4/messages/1":
+      | sender.email | ada@tonotop.com       |
+      | thread.name  | spaces/RX4/threads/T1 |
+      | text         | anyone around?        |
+    When Google Chat delivers a message event for "spaces/RX4/messages/1"
+    Then no reaction calls were made
+
+  Scenario: gchat/reactions false turns the lifecycle off, the reply still posts once (isaac-1bq1)
+    Given config:
+      | comms.gchat.gchat/reactions               | false          |
+      | comms.gchat.gchat/spaces.spaces/RX5.name  | reactions-five |
+      | comms.gchat.gchat/spaces.spaces/RX5.crew  | main           |
+    And the Chat API returns message "spaces/RX5/messages/1":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/RX5/threads/T1 |
+      | text                | @Isaac status?        |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type | content    |
+      | echo  | text | All clear. |
+    When Google Chat delivers a message event for "spaces/RX5/messages/1"
+    Then no reaction calls were made
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/RX5/messages" matches:
+      | body.text | All clear. |

@@ -66,4 +66,36 @@
         (should= "users/bob@tonotop.com"
                  (get-in @captured [:body :memberships 0 :member :name])))))
 
+  (it "POSTs an emoji reaction on the triggering message"
+    (let [captured (atom nil)]
+      (with-redefs [sut/-http!
+                    (fn [req]
+                      (reset! captured req)
+                      {:status 200 :body {:name "spaces/ENG/messages/1/reactions/1"}})]
+        (should= "spaces/ENG/messages/1/reactions/1"
+                 (:name (sut/create-reaction! {:message "spaces/ENG/messages/1" :emoji "👀" :token "at-1"})))
+        (should= "POST" (:method @captured))
+        (should= "https://chat.googleapis.com/v1/spaces/ENG/messages/1/reactions" (:url @captured))
+        (should= "Bearer at-1" (get-in @captured [:headers "Authorization"]))
+        (should= "👀" (get-in @captured [:body :emoji :unicode])))))
+
+  (it "throws when Chat refuses a reactions.create"
+    (with-redefs [sut/-http! (fn [_] {:status 403 :body {}})]
+      (should-throw (sut/create-reaction! {:message "spaces/ENG/messages/1" :emoji "👀" :token "at-1"}))))
+
+  (it "DELETEs a reaction by its own resource name"
+    (let [captured (atom nil)]
+      (with-redefs [sut/-http!
+                    (fn [req]
+                      (reset! captured req)
+                      {:status 200 :body {}})]
+        (sut/delete-reaction! {:reaction "spaces/ENG/messages/1/reactions/1" :token "at-1"})
+        (should= "DELETE" (:method @captured))
+        (should= "https://chat.googleapis.com/v1/spaces/ENG/messages/1/reactions/1" (:url @captured))
+        (should= "Bearer at-1" (get-in @captured [:headers "Authorization"])))))
+
+  (it "throws when Chat refuses a reactions.delete"
+    (with-redefs [sut/-http! (fn [_] {:status 403 :body {}})]
+      (should-throw (sut/delete-reaction! {:reaction "spaces/ENG/messages/1/reactions/1" :token "at-1"}))))
+
   )
