@@ -1,5 +1,5 @@
 {:id          :isaac.comm.gchat
- :version     "0.2.1"
+ :version     "0.2.2"
  :builtin?    true
  :factory     isaac.comm.gchat.module/create-module
  :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
@@ -71,7 +71,11 @@
          :expiry  isaac.comm.gchat.registration/expiry
          :key     isaac.comm.gchat.registration/subscription-keys}}
 
+ ;; chat.memberships.readonly: the spaces/- subscription carries membership
+ ;; event types, and Workspace Events refuses the create without it
+ ;; ("Request had insufficient authentication scopes", yopp 2026-09-23).
  :isaac.google/scopes
  ["https://www.googleapis.com/auth/chat.messages"
-  "https://www.googleapis.com/auth/chat.spaces.readonly"]
+  "https://www.googleapis.com/auth/chat.spaces.readonly"
+  "https://www.googleapis.com/auth/chat.memberships.readonly"]
  }

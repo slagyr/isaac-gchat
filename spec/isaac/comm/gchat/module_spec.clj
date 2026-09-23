@@ -23,10 +23,11 @@
     (should= 'isaac.comm.gchat.handler/handle-event
              (get-in manifest [:isaac.google/handler "google.workspace.chat.message.v1.created"])))
 
-  (it "contributes a Chat registration and spaces.readonly"
+  (it "contributes a Chat registration and the messages, spaces and memberships scopes"
     (should= 'isaac.comm.gchat.registration/create!
              (get-in manifest [:isaac.google/registration :chat :create!]))
     (should= ["https://www.googleapis.com/auth/chat.messages"
-              "https://www.googleapis.com/auth/chat.spaces.readonly"]
+              "https://www.googleapis.com/auth/chat.spaces.readonly"
+              "https://www.googleapis.com/auth/chat.memberships.readonly"]
              (:isaac.google/scopes manifest)))
   )
