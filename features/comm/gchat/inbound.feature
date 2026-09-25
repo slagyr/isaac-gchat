@@ -666,7 +666,7 @@ Feature: Google Chat inbound gate
       | echo  | text | A PDF, got it. |
     When Google Chat delivers a message event for "spaces/IA1/messages/1"
     Then the file "attachments/1/report.pdf" under the session working directory contains "%PDF-1.4 stub"
-    And session "gchat-tonotop-inbound-attach" has transcript matching:
+    And session "gchat-spaces-IA1" has transcript matching:
       | type    | message.role | message.content                                                        |
       | message | user         | #"(?s).*\[attachment: report\.pdf \(application/pdf, .*\) at attachments/1/report\.pdf\].*" |
       | message | assistant    | A PDF, got it.                                                         |
