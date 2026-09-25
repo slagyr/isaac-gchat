@@ -669,3 +669,68 @@ Feature: Google Chat inbound gate
       | type    | message.role | message.content                                                        |
       | message | user         | #"(?s).*\[attachment: report\.pdf \(application/pdf, .*\) at attachments/1/report\.pdf\].*" |
       | message | assistant    | A PDF, got it.                                                         |
+
+  # Chat serves attachment bytes from the media endpoint (isaac-468y). The e2zb stub
+  # accepted any URL, so the wrong path went unnoticed until yopp got a 404.
+
+  @wip
+  Scenario: an attachment is downloaded from Chat's media endpoint (isaac-468y)
+    Given the crew "main" allows tools: "fs/*"
+    And config:
+      | comms.gchat.gchat/spaces.spaces/IA2.name | media-attach |
+      | comms.gchat.gchat/spaces.spaces/IA2.crew | main         |
+    And the Chat API returns message "spaces/IA2/messages/1":
+      | sender.email                                | ada@tonotop.com              |
+      | thread.name                                 | spaces/IA2/threads/T1        |
+      | text                                        | @Isaac see attached          |
+      | annotations.mention                         | users/yopp                   |
+      | attachment.0.contentName                    | notes.txt                    |
+      | attachment.0.contentType                    | text/plain                   |
+      | attachment.0.attachmentDataRef.resourceName | spaces/IA2/attachments/att-2 |
+    And the Chat API serves attachment "spaces/IA2/attachments/att-2" with content "meeting notes"
+    And the following model responses are queued:
+      | model | type | content   |
+      | echo  | text | Read them. |
+    When Google Chat delivers a message event for "spaces/IA2/messages/1"
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/media/spaces/IA2/attachments/att-2" were made
+    And the file "attachments/1/notes.txt" under the session working directory contains "meeting notes"
+
+  # Waiting room + consolidation (isaac-xoqn): a session mid-turn does not refuse the
+  # next messages; prompts in one thread are answered together.
+
+  @wip
+  Scenario: three quick messages in one DM thread get one consolidated reply (isaac-xoqn)
+    Given config:
+      | comms.gchat.gchat/spaces.spaces/DMQ.name | dm-queue |
+      | comms.gchat.gchat/spaces.spaces/DMQ.crew | main     |
+    And session "gchat-spaces-DMQ" is in flight
+    And the Chat API returns message "spaces/DMQ/messages/1":
+      | sender.email        | ada@tonotop.com        |
+      | thread.name         | spaces/DMQ/threads/T1  |
+      | text                | @Isaac first           |
+      | annotations.mention | users/yopp             |
+    And the Chat API returns message "spaces/DMQ/messages/2":
+      | sender.email        | ada@tonotop.com        |
+      | thread.name         | spaces/DMQ/threads/T1  |
+      | text                | @Isaac second          |
+      | annotations.mention | users/yopp             |
+    And the Chat API returns message "spaces/DMQ/messages/3":
+      | sender.email        | ada@tonotop.com        |
+      | thread.name         | spaces/DMQ/threads/T1  |
+      | text                | @Isaac third           |
+      | annotations.mention | users/yopp             |
+    And the following model responses are queued:
+      | model | type | content              |
+      | echo  | text | All three, answered. |
+    When Google Chat delivers a message event for "spaces/DMQ/messages/1"
+    And Google Chat delivers a message event for "spaces/DMQ/messages/2"
+    And Google Chat delivers a message event for "spaces/DMQ/messages/3"
+    And the in-flight turn on session "gchat-spaces-DMQ" ends
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/DMQ/messages" were made
+    And session "gchat-spaces-DMQ" has transcript matching:
+      | type    | message.role | message.content                             |
+      | message | user         | #"(?s).*first.*second.*third.*"             |
+      | message | assistant    | All three, answered.                        |
+    And the log has entries matching:
+      | level | event           | session          | count |
+      | :info | :turn/coalesced | gchat-spaces-DMQ | 3     |
