@@ -480,50 +480,59 @@ Feature: Google Chat outbound
       | body.emoji.unicode | ✅ |
     And 4 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/RX8/messages/1/reactions" were made
 
-  # A tool send to the origin space+thread is the reply — on-reply posts
-  # nothing more for that turn (isaac-mw27). Own spaces, same reason as RX1-8.
+  # One send tool (isaac-baf1). The response is the text the turn ends with
+  # and the comm posts it; comm__send is for additional messages. A send into
+  # the origin thread is such a message — it never stands in for the
+  # response, so both post.
 
-  Scenario: gchat__send to the origin thread is the reply — the turn's final text is not posted again (isaac-mw27)
-    Given the crew "main" allows tools: "gchat__send"
+  @wip
+  Scenario: comm__send into the origin thread during the turn, then the answer — both post (isaac-baf1)
+    Given the crew "main" allows tools: "comm/send"
     And config:
-      | comms.gchat.gchat/spaces.spaces/DD1.name | dedupe-one |
-      | comms.gchat.gchat/spaces.spaces/DD1.crew | main       |
-    And the Chat API returns message "spaces/DD1/messages/1":
+      | comms.gchat.gchat/spaces.spaces/OS1.name | one-send |
+      | comms.gchat.gchat/spaces.spaces/OS1.crew | main     |
+    And the Chat API returns message "spaces/OS1/messages/1":
       | sender.email        | ada@tonotop.com       |
-      | thread.name         | spaces/DD1/threads/T1 |
+      | thread.name         | spaces/OS1/threads/T1 |
       | text                | @Isaac status?        |
       | annotations.mention | users/yopp            |
     And the following model responses are queued:
-      | model | type | content    | tool_call   | arguments                                                                        |
-      | echo  |      |            | gchat__send | {"space":"spaces/DD1","thread":"spaces/DD1/threads/T1","text":"All green."} |
-      | echo  | text | All green. |             |                                                                                  |
-    When Google Chat delivers a message event for "spaces/DD1/messages/1"
-    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/DD1/messages" were made
-    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DD1/messages" matches:
-      | body.thread.name | spaces/DD1/threads/T1 |
+      | model | type | content    | tool_call  | arguments                                                                                                  |
+      | echo  |      |            | comm__send | {"comm":"gchat","gchat.space":"spaces/OS1","gchat.thread":"spaces/OS1/threads/T1","content":"Looking now."} |
+      | echo  | text | All green. |            |                                                                                                            |
+    When Google Chat delivers a message event for "spaces/OS1/messages/1"
+    And the delivery worker ticks
+    Then 2 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/OS1/messages" were made
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/OS1/messages" matches:
+      | body.thread.name | spaces/OS1/threads/T1 |
+      | body.text        | Looking now.          |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/OS1/messages" matches:
+      | body.thread.name | spaces/OS1/threads/T1 |
       | body.text        | All green.            |
 
-  Scenario: gchat__send to another thread does not stand in for the reply — both post (isaac-mw27)
-    Given the crew "main" allows tools: "gchat__send"
+  # Attachments (isaac-vlxz): Chat takes a media upload per file first, then
+  # the message references what was uploaded.
+
+  @wip
+  Scenario: comm__send with an attachment uploads it, then posts the message referencing it (isaac-vlxz)
+    Given the crew "main" allows tools: "comm/send"
     And config:
-      | comms.gchat.gchat/spaces.spaces/DD2.name | dedupe-two |
-      | comms.gchat.gchat/spaces.spaces/DD2.crew | main       |
-    And the Chat API returns message "spaces/DD2/messages/1":
+      | comms.gchat.gchat/spaces.spaces/AT1.name | attach-one |
+      | comms.gchat.gchat/spaces.spaces/AT1.crew | main       |
+    And a file "report.pdf" exists in the session working directory with content "%PDF-1.4 stub"
+    And the Chat API returns message "spaces/AT1/messages/1":
       | sender.email        | ada@tonotop.com       |
-      | thread.name         | spaces/DD2/threads/T1 |
-      | text                | @Isaac status?        |
+      | thread.name         | spaces/AT1/threads/T1 |
+      | text                | @Isaac send the report |
       | annotations.mention | users/yopp            |
     And the following model responses are queued:
-      | model | type | content    | tool_call   | arguments                                                               |
-      | echo  |      |            | gchat__send | {"space":"spaces/DD2","thread":"spaces/DD2/threads/T2","text":"FYI."} |
-      | echo  | text | All green. |             |                                                                         |
-    When Google Chat delivers a message event for "spaces/DD2/messages/1"
-    Then 2 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/DD2/messages" were made
-    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DD2/messages" matches:
-      | #index           | 0                     |
-      | body.thread.name | spaces/DD2/threads/T2 |
-      | body.text        | FYI.                  |
-    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DD2/messages" matches:
-      | #index           | 1                     |
-      | body.thread.name | spaces/DD2/threads/T1 |
-      | body.text        | All green.            |
+      | model | type | content | tool_call  | arguments                                                                                                                                       |
+      | echo  |      |         | comm__send | {"comm":"gchat","gchat.space":"spaces/AT1","gchat.thread":"spaces/AT1/threads/T1","content":"Here is the report.","attachments":["report.pdf"]} |
+      | echo  | text | Sent.   |            |                                                                                                                                                 |
+    When Google Chat delivers a message event for "spaces/AT1/messages/1"
+    And the delivery worker ticks
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/upload/v1/spaces/AT1/attachments:upload" were made
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/AT1/messages" matches:
+      | body.thread.name                                 | spaces/AT1/threads/T1 |
+      | body.text                                        | Here is the report.   |
+      | body.attachment.0.attachmentDataRef.resourceName | #".+"                 |
