@@ -6,6 +6,7 @@
     [clojure.string :as str]
     [isaac.comm.delivery.queue :as delivery-queue]
     [isaac.comm.factory :as factory]
+    [isaac.comm.gchat.attachment :as attachment]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.self :as self]
     [isaac.comm.gchat.format :as fmt]
@@ -48,19 +49,22 @@
   ([] ((requiring-resolve 'isaac.google.token/token)))
   ([slice] ((requiring-resolve 'isaac.google.token/token) (tenant/of-comm slice))))
 
-(defn- post-chunks! [space thread text cap token tenant]
+(defn- post-chunks!
+  "Posts text as one message per chunk. Attachments ride the first chunk."
+  [space thread text cap token tenant & [attachments]]
   (let [chunks (fmt/split-content (fmt/->chat-text text) cap)]
-    (doseq [chunk chunks]
+    (doseq [[i chunk] (map-indexed vector chunks)]
       ;; The response's :sender is Isaac — the one free source of the account's
       ;; users/<id>, which the gate needs to see its own replies. Keyed by
       ;; tenant: a comm speaks for one organization (isaac-1zkz), and an id
       ;; learned for one must never be mistaken for another's self (isaac-mm7o).
       (self/learn-from-send!
         tenant
-        (chat-api/create-message! {:space  space
-                                   :thread thread
-                                   :text   chunk
-                                   :token  token})))))
+        (chat-api/create-message! (cond-> {:space  space
+                                           :thread thread
+                                           :text   chunk
+                                           :token  token}
+                                    (and (zero? i) (seq attachments)) (assoc :attachments attachments)))))))
 
 (defn- resolve-dm-space! [email token]
   (or (:name (chat-api/find-direct-message! email token))
@@ -83,8 +87,9 @@
             {:ok false :transient? false})
 
         :else
-        (do (post-chunks! space thread text cap token (tenant/of-comm cfg))
-            {:ok true})))
+        (let [refs (attachment/upload-all! space token (:attachments record))]
+          (post-chunks! space thread text cap token (tenant/of-comm cfg) refs)
+          {:ok true})))
     (catch Exception e
       (log/error :gchat.send/failed :error (.getMessage e))
       {:ok false :transient? true :error (.getMessage e)})))

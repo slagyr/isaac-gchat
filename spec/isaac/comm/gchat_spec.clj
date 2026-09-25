@@ -65,6 +65,65 @@
         (should= "spaces/DMBOB" (get-in (nth @calls 2) [1 :space]))
         (should= "Standup in 5." (get-in (nth @calls 2) [1 :text])))))
 
+  (context "attachments (isaac-vlxz)"
+
+    (around [it] (nexus/-with-nexus {:fs (fs/mem-fs)} (it)))
+
+    (it "uploads each file, then posts one message referencing them with the text"
+      (let [calls (atom [])
+            c     (comm-with slice)]
+        (fs/spit (fs/instance) "/work/report.pdf" "%PDF-1.4 stub")
+        (fs/spit (fs/instance) "/work/notes.txt" "hi")
+        (with-redefs [sut/access-token (constantly "at-1")
+                      chat-api/upload-attachment! (fn [opts]
+                                                    (swap! calls conj [:upload opts])
+                                                    {:resourceName (str "ref-" (:filename opts))})
+                      chat-api/create-message! (fn [opts]
+                                                 (swap! calls conj [:create opts])
+                                                 {:name "m1"})]
+          (should= {:ok true} (comm/send! c {:gchat/space  "spaces/ENG"
+                                             :content      "Here is the report."
+                                             :attachments  ["/work/report.pdf" "/work/notes.txt"]}))
+          (should= [:upload :upload :create] (mapv first @calls))
+          (let [[_ up1] (first @calls)
+                [_ up2] (second @calls)
+                [_ msg] (nth @calls 2)]
+            (should= "report.pdf" (:filename up1))
+            (should= "application/pdf" (:content-type up1))
+            (should= "%PDF-1.4 stub" (String. ^bytes (:bytes up1) "UTF-8"))
+            (should= "spaces/ENG" (:space up1))
+            (should= "at-1" (:token up1))
+            (should= "text/plain" (:content-type up2))
+            (should= "Here is the report." (:text msg))
+            (should= [{:resourceName "ref-report.pdf"} {:resourceName "ref-notes.txt"}] (:attachments msg))))))
+
+    (it "a failed upload fails the delivery and posts no message"
+      (let [created (atom 0)
+            c       (comm-with slice)]
+        (fs/spit (fs/instance) "/work/report.pdf" "%PDF")
+        (with-redefs [sut/access-token (constantly "at-1")
+                      chat-api/upload-attachment! (fn [_] (throw (ex-info "Chat API upload failed: 500" {})))
+                      chat-api/create-message! (fn [_] (swap! created inc) {:name "m1"})]
+          (log/capture-logs
+            (let [result (comm/send! c {:gchat/space "spaces/ENG" :content "Here."
+                                        :attachments ["/work/report.pdf"]})]
+              (should= false (:ok result))
+              (should= true (:transient? result))
+              (should= 0 @created))))))
+
+    (it "attaches only to the first chunk of a long message"
+      (let [creates (atom [])
+            c       (comm-with (assoc slice :gchat/message-cap 10))]
+        (fs/spit (fs/instance) "/work/a.png" "png")
+        (with-redefs [sut/access-token (constantly "at-1")
+                      chat-api/upload-attachment! (fn [_] {:resourceName "ref-a"})
+                      chat-api/create-message! (fn [opts] (swap! creates conj opts) {:name "m1"})]
+          (comm/send! c {:gchat/space "spaces/ENG" :content "aaaaaaaa bbbbbbbb cccccccc"
+                         :attachments ["/work/a.png"]})
+          (should (< 1 (count @creates)))
+          (should= [{:resourceName "ref-a"}] (:attachments (first @creates)))
+          (should (every? #(empty? (:attachments %)) (rest @creates)))))))
+
   (it "replies in the originating thread on on-reply"
     (let [captured (atom nil)
           c        (comm-with slice)]

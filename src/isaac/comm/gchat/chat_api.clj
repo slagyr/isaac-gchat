@@ -9,6 +9,7 @@
     (java.net URLEncoder)))
 
 (def ^:private chat-base "https://chat.googleapis.com/v1")
+(def ^:private upload-base "https://chat.googleapis.com/upload/v1")
 
 (defn- parse-body [body]
   (try
@@ -33,11 +34,12 @@
   @last-request*)
 
 (defn -http!
-  "Internal HTTP seam. Returns {:status n :body parsed}."
-  [{:keys [method url headers query body] :as req}]
+  "Internal HTTP seam. Returns {:status n :body parsed}. :body is sent as
+   JSON; :raw-body (bytes) is sent as-is, for media uploads."
+  [{:keys [method url headers query body raw-body] :as req}]
   (reset! last-request* req)
   (let [full-url (with-query url query)
-        payload  (when body (json/generate-string body))
+        payload  (or raw-body (when body (json/generate-string body)))
         opts     (cond-> {:headers (or headers {}) :throw false}
                    payload (assoc :body payload))
         response (case (keyword method)
@@ -72,13 +74,47 @@
       (throw (ex-info (str "Chat API spaces.get failed: " (:status resp))
                       {:status (:status resp) :body (:body resp) :space space})))))
 
+(defn- multipart-related
+  "A multipart/related body: the JSON metadata part, then the media part."
+  [boundary metadata content-type ^bytes data]
+  (let [head (str "--" boundary "\r\n"
+                  "Content-Type: application/json; charset=UTF-8\r\n\r\n"
+                  (json/generate-string metadata) "\r\n"
+                  "--" boundary "\r\n"
+                  "Content-Type: " content-type "\r\n\r\n")
+        tail (str "\r\n--" boundary "--\r\n")
+        out  (java.io.ByteArrayOutputStream.)]
+    (.write out (.getBytes head "UTF-8"))
+    (.write out data)
+    (.write out (.getBytes tail "UTF-8"))
+    (.toByteArray out)))
+
+(defn upload-attachment!
+  "POST media.upload (spaces.attachments:upload) — one file, multipart with
+   its filename. Returns the attachmentDataRef a message then references.
+   Throws on non-2xx so the send fails whole, never a partial message."
+  [{:keys [space filename content-type bytes token]}]
+  (let [boundary (str "isaac-" (random-uuid))
+        resp     (-http! {:method   "POST"
+                          :url      (str upload-base "/" space "/attachments:upload")
+                          :headers  {"Authorization" (str "Bearer " token)
+                                     "Content-Type"  (str "multipart/related; boundary=" boundary)}
+                          :query    {:uploadType "multipart"}
+                          :raw-body (multipart-related boundary {:filename filename} content-type bytes)})]
+    (if (<= 200 (:status resp) 299)
+      (get-in resp [:body :attachmentDataRef])
+      (throw (ex-info (str "Chat API attachment upload failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :space space :filename filename})))))
+
 (defn create-message!
-  "POST spaces.messages.create. When :thread is set, reply in that thread."
-  [{:keys [space thread text token]}]
+  "POST spaces.messages.create. When :thread is set, reply in that thread;
+   :attachments are attachmentDataRefs from upload-attachment!."
+  [{:keys [space thread text token attachments]}]
   (let [query (when (seq thread)
                 {:messageReplyOption "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD"})
         body  (cond-> {:text text}
-                (seq thread) (assoc :thread {:name thread}))
+                (seq thread)      (assoc :thread {:name thread})
+                (seq attachments) (assoc :attachment (mapv (fn [ref] {:attachmentDataRef ref}) attachments)))
         resp  (-http! {:method  "POST"
                        :url     (str chat-base "/" space "/messages")
                        :headers {"Authorization" (str "Bearer " token)

@@ -98,4 +98,49 @@
     (with-redefs [sut/-http! (fn [_] {:status 403 :body {}})]
       (should-throw (sut/delete-reaction! {:reaction "spaces/ENG/messages/1/reactions/1" :token "at-1"}))))
 
+  (it "uploads an attachment as a multipart request and answers its data ref (isaac-vlxz)"
+    (let [captured (atom nil)]
+      (with-redefs [sut/-http!
+                    (fn [req]
+                      (reset! captured req)
+                      {:status 200 :body {:attachmentDataRef {:resourceName "ref-1"}}})]
+        (should= {:resourceName "ref-1"}
+                 (sut/upload-attachment! {:space        "spaces/ENG"
+                                          :filename     "report.pdf"
+                                          :content-type "application/pdf"
+                                          :bytes        (.getBytes "%PDF-1.4 stub" "UTF-8")
+                                          :token        "at-1"}))
+        (should= "POST" (:method @captured))
+        (should= "https://chat.googleapis.com/upload/v1/spaces/ENG/attachments:upload" (:url @captured))
+        (should= "multipart" (get-in @captured [:query :uploadType]))
+        (should= "Bearer at-1" (get-in @captured [:headers "Authorization"]))
+        (let [content-type (get-in @captured [:headers "Content-Type"])
+              boundary     (second (re-find #"boundary=(\S+)" content-type))
+              body         (String. ^bytes (:raw-body @captured) "UTF-8")]
+          (should (.startsWith ^String content-type "multipart/related"))
+          (should-contain (str "--" boundary) body)
+          (should-contain "{\"filename\":\"report.pdf\"}" body)
+          (should-contain "Content-Type: application/pdf" body)
+          (should-contain "%PDF-1.4 stub" body)
+          (should-contain (str "--" boundary "--") body)))))
+
+  (it "throws when Chat refuses an attachment upload"
+    (with-redefs [sut/-http! (fn [_] {:status 413 :body {}})]
+      (should-throw (sut/upload-attachment! {:space "spaces/ENG" :filename "a.txt" :content-type "text/plain"
+                                             :bytes (byte-array 0) :token "at-1"}))))
+
+  (it "posts a message carrying attachment refs alongside its text"
+    (let [captured (atom nil)]
+      (with-redefs [sut/-http! (fn [req] (reset! captured req) {:status 200 :body {:name "m1"}})]
+        (sut/create-message! {:space "spaces/ENG" :text "Here." :token "at-1"
+                              :attachments [{:resourceName "ref-1"}]})
+        (should= "Here." (get-in @captured [:body :text]))
+        (should= [{:attachmentDataRef {:resourceName "ref-1"}}] (get-in @captured [:body :attachment])))))
+
+  (it "posts no attachment key when there are no attachments"
+    (let [captured (atom nil)]
+      (with-redefs [sut/-http! (fn [req] (reset! captured req) {:status 200 :body {:name "m1"}})]
+        (sut/create-message! {:space "spaces/ENG" :text "Here." :token "at-1"})
+        (should-not-contain :attachment (:body @captured)))))
+
   )

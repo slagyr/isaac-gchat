@@ -516,7 +516,6 @@ Feature: Google Chat outbound
   # Attachments (isaac-vlxz): Chat takes a media upload per file first, then
   # the message references what was uploaded.
 
-  @wip
   Scenario: comm__send with an attachment uploads it, then posts the message referencing it (isaac-vlxz)
     Given the crew "main" allows tools: "comm/send"
     And config:

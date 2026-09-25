@@ -203,6 +203,12 @@
       (re-find #"/reactions/\d+$" (str url))
       {:status 200 :body {}}
 
+      ;; media.upload — each upload answers its own attachmentDataRef, which
+      ;; the message then references (isaac-vlxz).
+      (str/ends-with? (str url) "/attachments:upload")
+      {:status 200 :body {:attachmentDataRef {:resourceName          (str url "/" (count (g/get :outbound-http-requests)))
+                                              :attachmentUploadToken "upload-token"}}}
+
       (and stub (= url "https://chat.googleapis.com/v1/spaces:findDirectMessage")
            (:no-dm stub))
       {:status 404 :body {}}
@@ -240,20 +246,30 @@
       {:status 200 :body {}})))
 
 (defonce ^:private real-chat-http* (atom nil))
+(defonce ^:private real-google-token* (atom nil))
+
+(declare stub-google-token)
 
 (defn- own-chat-http!
-  "Take the Chat HTTP seam for the whole scenario. The registration timer
-   ticks in isaac-google's step, outside any with-redefs of ours, so a
-   scenario that stubs spaces.list has to hold the seam across steps."
+  "Take the Chat HTTP and token seams for the whole scenario. The
+   registration timer ticks in isaac-google's step, and the delivery worker
+   ticks in isaac-agent's (a comm__send, isaac-baf1), both outside any
+   with-redefs of ours, so the seams are held across steps."
   []
   (when-not @real-chat-http*
     (reset! real-chat-http* chat-api/-http!)
-    (alter-var-root #'chat-api/-http! (constantly stub-http!))))
+    (alter-var-root #'chat-api/-http! (constantly stub-http!)))
+  (when-not @real-google-token*
+    (reset! real-google-token* google-token/token)
+    (alter-var-root #'google-token/token (constantly #'stub-google-token))))
 
 (defn restore-chat-http! []
   (when-let [original @real-chat-http*]
     (alter-var-root #'chat-api/-http! (constantly original))
-    (reset! real-chat-http* nil)))
+    (reset! real-chat-http* nil))
+  (when-let [original @real-google-token*]
+    (alter-var-root #'google-token/token (constantly original))
+    (reset! real-google-token* nil)))
 
 (defn chat-api-knows-space
   "What spaces.get answers for one space for the rest of this scenario - its
@@ -315,6 +331,7 @@
   (ensure-gchat-factory!)
   (inject-gchat-module!)
   (ensure-session-store!)
+  (own-chat-http!)
   (let [fs*  (feature-fs)
         root (root-dir)
         comm (gchat/make {:name (keyword name) :root root})
