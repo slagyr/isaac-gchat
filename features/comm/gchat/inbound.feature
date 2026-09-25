@@ -15,6 +15,7 @@ Feature: Google Chat inbound gate
     And config:
       | log.output                               | memory              |
       | comms.gchat.gchat/account                | yopp@tonotop.com    |
+      | comms.gchat.gchat/account-id             | users/yopp          |
       | comms.gchat.gchat/allow-from             | ["ada@tonotop.com"] |
       | comms.gchat.gchat/spaces.spaces/ENG.name | Engineering         |
       | comms.gchat.gchat/spaces.spaces/ENG.crew | main                |
@@ -44,6 +45,21 @@ Feature: Google Chat inbound gate
       | thread.name  | spaces/ENG/threads/T1 |
       | text         | lunch anyone?         |
     When Google Chat delivers a message event for "spaces/ENG/messages/2"
+    Then the session count is 0
+    And grover records zero provider requests
+    And the log has entries matching:
+      | level  | event                 | space      |
+      | :debug | :gchat/message-logged | spaces/ENG |
+
+  Scenario: a message that mentions someone else is heard, not answered (isaac-klye)
+    A mention means the account. A message that @-mentions a colleague is
+    not addressed to Isaac, even though it carries a user mention.
+    Given the Chat API returns message "spaces/ENG/messages/3":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/ENG/threads/T1 |
+      | text                | @Chris can you look?  |
+      | annotations.mention | users/chris           |
+    When Google Chat delivers a message event for "spaces/ENG/messages/3"
     Then the session count is 0
     And grover records zero provider requests
     And the log has entries matching:
@@ -338,6 +354,7 @@ Feature: Google Chat inbound gate
     message as self for another.
     Given config:
       | comms.gchat.gchat/google       | tonotop                |
+      | comms.gchat.gchat/account-id   | #delete                |
       | comms.gchat.gchat/allow-from   | ["domain:tonotop.com"] |
       | comms.gchat-acme.type          | gchat                  |
       | comms.gchat-acme.gchat/google  | acme                   |
@@ -359,7 +376,7 @@ Feature: Google Chat inbound gate
       | sender.domainId     | tonotop.com            |
       | thread.name         | spaces/ENG/threads/T2  |
       | text                | look at this           |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/self-at-tonotop  |
     When Google Chat delivers a message event for "spaces/ENG/messages/10"
     Then the session count is 1
     And the log has entries matching:

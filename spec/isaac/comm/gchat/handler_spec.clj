@@ -10,6 +10,7 @@
 
 (def cfg
   {:comms {:gchat {:gchat/account    "yopp@tonotop.com"
+                   :gchat/account-id "users/yopp"
                    :gchat/allow-from ["ada@tonotop.com"]
                    :gchat/spaces     {:spaces/ENG {:name "Engineering" :crew "main"}}}}})
 
@@ -65,6 +66,7 @@
   (it "a space nobody listed opens its canonical session, tagged with the space id"
     (let [created (atom nil)
           slice   {:gchat/account    "yopp@tonotop.com"
+                   :gchat/account-id "users/yopp"
                    :gchat/allow-from ["ada@tonotop.com"]}]
       (with-redefs [sut/-load-cfg         (fn [] slice)
                     chat-api/get-message! (fn [_] (-> mention-msg
@@ -83,6 +85,7 @@
     (let [dispatched (atom nil)
           renamed    (atom nil)
           slice      {:gchat/account    "yopp@tonotop.com"
+                      :gchat/account-id "users/yopp"
                       :gchat/allow-from ["ada@tonotop.com"]}]
       (with-redefs [sut/-load-cfg         (fn [] slice)
                     chat-api/get-message! (fn [_] (-> mention-msg
@@ -103,6 +106,7 @@
   (it "a rename the store refuses leaves the session where it is"
     (let [dispatched (atom nil)
           slice      {:gchat/account    "yopp@tonotop.com"
+                      :gchat/account-id "users/yopp"
                       :gchat/allow-from ["ada@tonotop.com"]}]
       (with-redefs [sut/-load-cfg         (fn [] slice)
                     chat-api/get-message! (fn [_] (-> mention-msg
@@ -123,6 +127,7 @@
   (it "dispatches on the operator's defaults.crew when the space and the comm name none (isaac-rfmh)"
     (let [dispatched (atom nil)
           host       {:comms    {:gchat {:gchat/account    "yopp@tonotop.com"
+                                         :gchat/account-id "users/yopp"
                                          :gchat/allow-from ["ada@tonotop.com"]}}
                       :defaults {:frequencies {:crew :yopp}}
                       :google   {:tonotop {:topic "projects/marigold/topics/isaac"}}}]
@@ -140,6 +145,7 @@
   (it "the session name says which organization's space it is, on a host with one"
     (let [created (atom nil)
           one-org {:comms  {:gchat {:gchat/account    "yopp@tonotop.com"
+                                    :gchat/account-id "users/yopp"
                                     :gchat/allow-from ["ada@tonotop.com"]}}
                    :google {:tonotop {:topic "projects/marigold/topics/isaac"}}}]
       (with-redefs [sut/-load-cfg         (fn [] (get-in one-org [:comms :gchat]))

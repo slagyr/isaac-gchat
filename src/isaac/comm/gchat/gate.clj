@@ -38,21 +38,53 @@
   (or (get-in message [:thread :name])
       (:thread message)))
 
+(def ^:private everyone
+  "The user resource Chat names for a space-wide @all."
+  "users/all")
+
+(defn- mentioned-user
+  "One annotation → {:name users/<id> :email ...} of the user it mentions, or nil."
+  [a]
+  (let [user (or (get-in a [:userMention :user]) (:user a))
+        name (or (when (string? (:mention a)) (:mention a)) (:name user))
+        email (or (:email user) (:email a))]
+    (when (or (seq (str (or name ""))) (seq (str (or email ""))))
+      {:name name :email email})))
+
+(defn- mentioned-users [ann]
+  (keep mentioned-user (cond (sequential? ann) ann
+                             (map? ann)        [ann]
+                             :else             [])))
+
+(defn- same-email? [a b]
+  (and (seq (str (or a ""))) (seq (str (or b "")))
+       (= (str/lower-case a) (str/lower-case b))))
+
+(defn- resolved-email
+  "Who users/<id> is, by email — only when the account's own id is not known
+   yet. Fails soft to nil."
+  [resolve-person user]
+  (when (and resolve-person (seq (str (or user ""))))
+    (try (:email (resolve-person user {}))
+         (catch Exception _ nil))))
+
+(defn- the-account?
+  "Does this mentioned user name the account? By users/<id> when the account's
+   id is known; by email when the annotation carries one; else — the id not
+   learned yet — by asking who the mentioned user is. A space-wide @all
+   addresses everyone in the space, the account included, so it counts."
+  [{:keys [name email]} {:keys [account account-user resolve-person]}]
+  (or (= everyone name)
+      (same-email? email account)
+      (if (seq (str (or account-user "")))
+        (= (str account-user) name)
+        (same-email? (resolved-email resolve-person name) account))))
+
 (defn- mentioned?
-  "True when annotations name a user resource (the account)."
-  [message]
-  (let [ann (:annotations message)]
-    (boolean
-      (cond
-        (string? (get ann :mention)) (seq (get ann :mention))
-        (sequential? ann)            (some (fn [a]
-                                             (or (:mention a)
-                                                 (get-in a [:userMention :user :name])
-                                                 (get-in a [:user :name])))
-                                           ann)
-        (map? ann)                   (or (seq (:mention ann))
-                                         (get-in ann [:userMention :user :name]))
-        :else                        false))))
+  "True when an annotation mentions the account itself (isaac-klye). A message
+   that @-mentions a colleague is not addressed to the account."
+  [message self]
+  (boolean (some #(the-account? % self) (mentioned-users (:annotations message)))))
 
 (defn- dm?
   "A direct message, by what the event said or by what Chat's listing says
@@ -207,7 +239,9 @@
             ;; Not spoken to, but in a space Isaac belongs to: heard, not
             ;; answered. The handler keeps the line so the next mention has
             ;; context (isaac-iv5c).
-            (and (= :mentions policy) (not (mentioned? message)))
+            (and (= :mentions policy) (not (mentioned? message {:account        account
+                                                             :account-user   account-user
+                                                             :resolve-person (:resolve-person opts)})))
             {:action   :log
              :reason   :logged
              :space    space

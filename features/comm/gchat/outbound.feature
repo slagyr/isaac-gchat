@@ -10,6 +10,7 @@ Feature: Google Chat outbound
       | log.output                               | memory              |
       | google.tonotop.project                   | marigold            |
       | comms.gchat.gchat/account                | yopp@tonotop.com    |
+      | comms.gchat.gchat/account-id             | users/yopp          |
       | comms.gchat.gchat/allow-from             | ["ada@tonotop.com"] |
       | comms.gchat.gchat/spaces.spaces/ENG.name | engineering         |
       | comms.gchat.gchat/spaces.spaces/ENG.crew | main                |

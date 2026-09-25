@@ -7,6 +7,7 @@
 
 (def cfg
   {:gchat/account    account
+   :gchat/account-id "users/yopp"
    :gchat/allow-from ["ada@tonotop.com"]
    :gchat/spaces     {:spaces/ENG {:name "Engineering" :crew "main"}}})
 
@@ -27,6 +28,12 @@
 (def human
   (-> (message)
       (assoc :sender {:name "users/118" :displayName "Micah Martin" :domainId "0ivzlyj"})))
+
+(defn in-space
+  "A space message carrying exactly these annotations."
+  [annotations]
+  (-> (message :mention nil :text "@Chris can you look?")
+      (assoc :annotations annotations)))
 
 (defn resolver
   "Stands in for isaac.google.people/resolve."
@@ -185,6 +192,47 @@
       (let [d (sut/decide cfg human {:resolve-person (resolver {:email account})})]
         (should= :drop (:action d))
         (should= :self (:reason d)))))
+
+  (context "a mention means the account (isaac-klye)"
+
+    (it "hears, and does not answer, a message that mentions someone else"
+      (should= :log (:action (sut/decide cfg (in-space {:mention "users/chris"}))))
+      (should= :log (:action (sut/decide cfg (in-space [{:type        "USER_MENTION"
+                                                          :userMention {:user {:name "users/chris"}}}]))))
+      (should= :log (:action (sut/decide cfg (in-space {:userMention {:user {:name "users/chris"}}})))))
+
+    (it "answers a mention of the account's users/<id>, in either annotation shape"
+      (should= :route (:action (sut/decide cfg (in-space {:mention "users/yopp"}))))
+      (should= :route (:action (sut/decide cfg (in-space {:userMention {:user {:name "users/yopp"}}}))))
+      (should= :route (:action (sut/decide cfg (in-space [{:userMention {:user {:name "users/chris"}}}
+                                                          {:userMention {:user {:name "users/yopp"}}}])))))
+
+    (it "answers a mention that names the account by email, in either annotation shape"
+      (let [cfg' (dissoc cfg :gchat/account-id)]
+        (should= :route (:action (sut/decide cfg' (in-space {:userMention {:user {:name "users/9" :email "Yopp@tonotop.com"}}}))))
+        (should= :route (:action (sut/decide cfg' (in-space [{:userMention {:user {:name "users/9" :email account}}}]))))
+        (should= :log (:action (sut/decide cfg' (in-space [{:userMention {:user {:name "users/9" :email "chris@tonotop.com"}}}]))))))
+
+    (it "knows the account by the id the handler learned when config names none"
+      (let [cfg' (dissoc cfg :gchat/account-id)]
+        (should= :route (:action (sut/decide cfg' (in-space {:mention "users/42"}) {:account-user "users/42"})))
+        (should= :log (:action (sut/decide cfg' (in-space {:mention "users/yopp"}) {:account-user "users/42"})))))
+
+    (it "asks who a mentioned user is when the account's id is not known yet"
+      (let [cfg' (dissoc cfg :gchat/account-id)
+            who  (fn [user _] {:user user :email (when (= "users/42" user) account)})]
+        (should= :route (:action (sut/decide cfg' (in-space {:mention "users/42"}) {:resolve-person who})))
+        (should= :log (:action (sut/decide cfg' (in-space {:mention "users/7"}) {:resolve-person who})))
+        (should= :log (:action (sut/decide cfg' (in-space {:mention "users/42"})
+                                           {:resolve-person (fn [& _] (throw (ex-info "down" {})))})))))
+
+    (it "treats a space-wide @all as a mention"
+      (should= :route (:action (sut/decide cfg (in-space [{:userMention {:user {:name "users/all"}}}])))))
+
+    (it "hears a message with no annotations and still answers every DM"
+      (should= :log (:action (sut/decide cfg (in-space nil))))
+      (should= :route (:action (sut/decide cfg (message :name "spaces/DM1/messages/1" :mention nil
+                                                        :space-type "DIRECT_MESSAGE"))))))
 
   (context "allow-from patterns (isaac-dymn)"
 
