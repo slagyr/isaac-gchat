@@ -483,7 +483,8 @@ Feature: Google Chat outbound
   # One send tool (isaac-baf1). The response is the text the turn ends with
   # and the comm posts it; comm__send is for additional messages. A send into
   # the origin thread is such a message — it never stands in for the
-  # response, so both post.
+  # response, so both post. comm__send is queue-first, so the reply posts
+  # first and the tool delivery posts when the delivery worker ticks.
 
   @wip
   Scenario: comm__send into the origin thread during the turn, then the answer — both post (isaac-baf1)
@@ -504,11 +505,13 @@ Feature: Google Chat outbound
     And the delivery worker ticks
     Then 2 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/OS1/messages" were made
     And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/OS1/messages" matches:
-      | body.thread.name | spaces/OS1/threads/T1 |
-      | body.text        | Looking now.          |
-    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/OS1/messages" matches:
+      | #index           | 0                     |
       | body.thread.name | spaces/OS1/threads/T1 |
       | body.text        | All green.            |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/OS1/messages" matches:
+      | #index           | 1                     |
+      | body.thread.name | spaces/OS1/threads/T1 |
+      | body.text        | Looking now.          |
 
   # Attachments (isaac-vlxz): Chat takes a media upload per file first, then
   # the message references what was uploaded.
