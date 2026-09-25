@@ -486,7 +486,6 @@ Feature: Google Chat outbound
   # response, so both post. comm__send is queue-first, so the reply posts
   # first and the tool delivery posts when the delivery worker ticks.
 
-  @wip
   Scenario: comm__send into the origin thread during the turn, then the answer — both post (isaac-baf1)
     Given the crew "main" allows tools: "comm/send"
     And config:

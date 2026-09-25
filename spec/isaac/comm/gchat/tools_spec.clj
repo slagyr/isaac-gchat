@@ -62,28 +62,7 @@
       (with-redefs [chat-api/list-messages! (fn [_ _ & _] {:messages [] :nextPageToken "abc"})]
         (should= true (:more? (:result (sut/history {:space "spaces/ENG"})))))))
 
-  (context "gchat__send"
-
-    (it "insists on a space and text"
-      (should (:isError (sut/send-message {:text "hi"})))
-      (should (:isError (sut/send-message {:space "spaces/ENG"}))))
-
-    (it "posts and answers with the message it created"
-      (let [sent (atom nil)]
-        (with-redefs [chat-api/create-message! (fn [req] (reset! sent req)
-                                                 {:name "spaces/ENG/messages/9"
-                                                  :thread {:name "spaces/ENG/threads/T1"}})]
-          (should= {:message "spaces/ENG/messages/9" :thread "spaces/ENG/threads/T1"}
-                   (:result (sut/send-message {:space "spaces/ENG" :text "on it"})))
-          (should= "on it" (:text @sent))
-          (should= "at-1" (:token @sent)))))
-
-    (it "reports a Chat failure as a tool error"
-      (with-redefs [chat-api/create-message! (fn [_] (throw (ex-info "boom" {})))]
-        (should (:isError (sut/send-message {:space "spaces/ENG" :text "hi"}))))))
-
-  (it "describes each tool for the model, and says which one is loud"
-    (should-contain "Side-effecting" (:description (sut/send-tool-factory {})))
+  (it "describes each tool for the model"
     (should= ["space"] (:required (:parameters (sut/history-tool-factory {}))))
     (should= {} (:properties (:parameters (sut/spaces-tool-factory {})))))
   )

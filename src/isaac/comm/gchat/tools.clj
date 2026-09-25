@@ -4,7 +4,8 @@
    The inbound path stays deterministic — the gate decides who may start a
    turn, and a mention arrives with the conversation since Isaac last spoke
    (isaac-iv5c). These tools are for everything beyond that: which spaces am I
-   in, what was said further back, and say this there."
+   in, and what was said further back. Sending is comm__send, the one send tool
+   (isaac-baf1)."
   (:require
     [clojure.string :as str]
     [isaac.comm.gchat :as gchat]
@@ -64,25 +65,6 @@
         (catch Exception e
           (error (str "Chat messages.list failed: " (.getMessage e))))))))
 
-(defn send-message
-  "Say something in a space, optionally in a thread."
-  [arguments]
-  (let [args   (args-of arguments)
-        space  (some-> (get args "space") str str/trim)
-        thread (some-> (get args "thread") str str/trim not-empty)
-        text   (some-> (get args "text") str)]
-    (cond
-      (str/blank? space) (error "space is required: a spaces/<id> resource name")
-      (str/blank? text)  (error "text is required")
-      :else
-      (try
-        (let [message (chat-api/create-message! {:space space :thread thread
-                                                 :text text :token (token)})]
-          {:result {:message (:name message)
-                    :thread  (get-in message [:thread :name])}})
-        (catch Exception e
-          (error (str "Chat message send failed: " (.getMessage e))))))))
-
 (defn spaces-tool-factory [_]
   {:description "List the Google Chat spaces and DMs this Isaac account is a member of."
    :parameters  {:type "object" :properties {}}
@@ -99,13 +81,3 @@
                               "limit"  {:type "integer" :description "Messages to return (default 50)"}}
                  :required   ["space"]}
    :handler     #'history})
-
-(defn send-tool-factory [_]
-  {:description (str "Post a message to a Chat space or thread as this Isaac account. "
-                     "Side-effecting: people will see it.")
-   :parameters  {:type       "object"
-                 :properties {"space"  {:type "string" :description "spaces/<id> resource name"}
-                              "thread" {:type "string" :description "Optional thread to reply in"}
-                              "text"   {:type "string" :description "What to say"}}
-                 :required   ["space" "text"]}
-   :handler     #'send-message})

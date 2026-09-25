@@ -31,4 +31,7 @@
               "https://www.googleapis.com/auth/chat.memberships.readonly"
               "https://www.googleapis.com/auth/chat.spaces.create"]
              (:isaac.google/scopes manifest)))
+
+  (it "contributes the read tools only - comm__send is the one send tool (isaac-baf1)"
+    (should= #{:gchat__history :gchat__spaces} (set (keys (:isaac.agent/tools manifest)))))
   )
