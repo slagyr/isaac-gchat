@@ -478,3 +478,51 @@ Feature: Google Chat outbound
       | #index             | 3  |
       | body.emoji.unicode | ✅ |
     And 4 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/RX8/messages/1/reactions" were made
+
+  # A tool send to the origin space+thread is the reply — on-reply posts
+  # nothing more for that turn (isaac-mw27). Own spaces, same reason as RX1-8.
+
+  Scenario: gchat__send to the origin thread is the reply — the turn's final text is not posted again (isaac-mw27)
+    Given the crew "main" allows tools: "gchat__send"
+    And config:
+      | comms.gchat.gchat/spaces.spaces/DD1.name | dedupe-one |
+      | comms.gchat.gchat/spaces.spaces/DD1.crew | main       |
+    And the Chat API returns message "spaces/DD1/messages/1":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/DD1/threads/T1 |
+      | text                | @Isaac status?        |
+      | annotations.mention | users/yopp            |
+    And the following model responses are queued:
+      | model | type | content    | tool_call   | arguments                                                                        |
+      | echo  |      |            | gchat__send | {"space":"spaces/DD1","thread":"spaces/DD1/threads/T1","text":"All green."} |
+      | echo  | text | All green. |             |                                                                                  |
+    When Google Chat delivers a message event for "spaces/DD1/messages/1"
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/DD1/messages" were made
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DD1/messages" matches:
+      | body.thread.name | spaces/DD1/threads/T1 |
+      | body.text        | All green.            |
+
+  Scenario: gchat__send to another thread does not stand in for the reply — both post (isaac-mw27)
+    Given the crew "main" allows tools: "gchat__send"
+    And config:
+      | comms.gchat.gchat/spaces.spaces/DD2.name | dedupe-two |
+      | comms.gchat.gchat/spaces.spaces/DD2.crew | main       |
+    And the Chat API returns message "spaces/DD2/messages/1":
+      | sender.email        | ada@tonotop.com       |
+      | thread.name         | spaces/DD2/threads/T1 |
+      | text                | @Isaac status?        |
+      | annotations.mention | users/yopp            |
+    And the following model responses are queued:
+      | model | type | content    | tool_call   | arguments                                                               |
+      | echo  |      |            | gchat__send | {"space":"spaces/DD2","thread":"spaces/DD2/threads/T2","text":"FYI."} |
+      | echo  | text | All green. |             |                                                                         |
+    When Google Chat delivers a message event for "spaces/DD2/messages/1"
+    Then 2 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/DD2/messages" were made
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DD2/messages" matches:
+      | #index           | 0                     |
+      | body.thread.name | spaces/DD2/threads/T2 |
+      | body.text        | FYI.                  |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DD2/messages" matches:
+      | #index           | 1                     |
+      | body.thread.name | spaces/DD2/threads/T1 |
+      | body.text        | All green.            |

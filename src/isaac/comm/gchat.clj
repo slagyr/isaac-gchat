@@ -2,6 +2,7 @@
   "Google Chat comm factory. Inbound lives on the google handler; send!
    and on-reply post as the Google user."
   (:require
+    [cheshire.core :as json]
     [clojure.string :as str]
     [isaac.comm.delivery.queue :as delivery-queue]
     [isaac.comm.factory :as factory]
@@ -22,6 +23,11 @@
 
 (defonce ^:private origin-by-session (atom {}))
 (defonce ^:private delivery-failures* (atom {}))
+
+;; Sessions whose model already answered the origin thread with gchat__send
+;; this turn. A tool send to the origin space+thread is the reply, so
+;; on-reply posts nothing more; cleared at on-turn-end (isaac-mw27).
+(defonce ^:private replied-via-tool* (atom #{}))
 
 ;; Reactions on the triggering message show Yopp's progress — 👀 working, ✅
 ;; answered, ⚠️ failed, ⏳ parked — instead of a status post (isaac-1bq1).
@@ -205,7 +211,33 @@
 (defn- on-reckoning* [comm session-key _cycle _chunk]
   (reaction-accumulate! comm session-key :thinking))
 
-(defn- on-tool-call* [comm session-key _tool-call]
+(defn- tool-arguments
+  "A tool call's arguments as a string-keyed map, whether the provider handed
+   over a map (keyword or string keys) or a JSON string."
+  [tool-call]
+  (let [raw  (or (:arguments tool-call) (get-in tool-call [:function :arguments]))
+        args (if (string? raw)
+               (try (json/parse-string raw) (catch Exception _ nil))
+               raw)]
+    (when (map? args)
+      (reduce-kv (fn [m k v] (assoc m (str/lower-case (name k)) v)) {} args))))
+
+(defn- blank->nil [v]
+  (some-> v str str/trim not-empty))
+
+(defn- origin-send?
+  "True when `tool-call` is gchat__send into the origin's own space and
+   thread - that send is the turn's reply (isaac-mw27)."
+  [origin tool-call]
+  (let [tool-name (or (:name tool-call) (get-in tool-call [:function :name]))]
+    (when (and origin (= "gchat__send" (some-> tool-name name)))
+      (let [args (tool-arguments tool-call)]
+        (and (= (blank->nil (:space origin)) (blank->nil (get args "space")))
+             (= (blank->nil (:thread origin)) (blank->nil (get args "thread"))))))))
+
+(defn- on-tool-call* [comm session-key tool-call]
+  (when (origin-send? (get @origin-by-session session-key) tool-call)
+    (swap! replied-via-tool* conj session-key))
   (reaction-accumulate! comm session-key :tool))
 
 (defn- on-aside* [comm session-key _cycle _text]
@@ -288,9 +320,17 @@
 (defn- on-reply* [comm session-key text]
   (when-let [origin (get @origin-by-session session-key)]
     (when (seq (str/trim (str text)))
-      (if (:invited? origin)
+      (cond
+        (:invited? origin)
         (do (divert-reply! origin text)
             (reaction-done! comm session-key origin))
+
+        (contains? @replied-via-tool* session-key)
+        (do (log/debug :gchat/reply-deduped :session session-key
+                       :space (:space origin) :thread (:thread origin))
+            (reaction-done! comm session-key origin))
+
+        :else
         (if-let [failure (reply! comm origin text)]
           (swap! delivery-failures* assoc session-key (assoc failure :class :delivery-failure))
           (do (note-own-reply! comm origin text)
@@ -395,6 +435,7 @@
 
       :else
       (swap! parked-sessions disj session-key)))
+  (swap! replied-via-tool* disj session-key)
   (swap! origin-by-session dissoc session-key))
 
 (deftype GchatComm [host cfg])

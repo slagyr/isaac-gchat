@@ -511,3 +511,66 @@
         (should= 1 (count (filter #(= :gchat.notice/failed (:event %)) @log/captured-logs))))))
 
   )
+
+(describe "gchat comm reply dedupe — a tool send to the origin thread is the reply (isaac-mw27)"
+
+  (def dedupe-origin {:kind :gchat :space "spaces/ENG" :thread "spaces/ENG/threads/T1"})
+
+  (defn- posts-for-turns!
+    "Runs each [tool-calls text] turn through the comm; returns every
+     create-message! call, with the logs captured."
+    [session-key & turns]
+    (let [posts (atom [])
+          c     (comm-with slice)]
+      (with-redefs [sut/access-token          (constantly "at-1")
+                    chat-api/create-message!  (fn [opts] (swap! posts conj opts) {:name "m1"})
+                    chat-api/create-reaction! (constantly {:name "r1"})
+                    chat-api/delete-reaction! (constantly nil)
+                    transcript/append!        (constantly nil)]
+        (doseq [[tool-calls text] turns]
+          (comm/on-cycle-start c session-key {:n 1 :origin dedupe-origin})
+          (doseq [tc tool-calls] (comm/on-tool-call c session-key tc))
+          (comm/on-reply c session-key text)
+          (comm/on-turn-end c session-key {})))
+      @posts))
+
+  (def origin-send {:name      "gchat__send"
+                    :arguments {:space "spaces/ENG" :thread "spaces/ENG/threads/T1" :text "All green."}})
+
+  (it "posts nothing on on-reply after gchat__send to the origin space and thread, and logs reply-deduped"
+    (log/capture-logs
+      (should= [] (posts-for-turns! "dedupe-1" [[origin-send] "All green."]))
+      (let [entry (first (filter #(= :gchat/reply-deduped (:event %)) @log/captured-logs))]
+        (should-not-be-nil entry)
+        (should= :debug (:level entry)))))
+
+  (it "recognizes JSON-string arguments too"
+    (log/capture-logs
+      (should= [] (posts-for-turns! "dedupe-2"
+                                    [[{:function {:name      "gchat__send"
+                                                  :arguments "{\"space\":\"spaces/ENG\",\"thread\":\"spaces/ENG/threads/T1\",\"text\":\"x\"}"}}]
+                                     "All green."]))))
+
+  (it "posts the reply once when the turn made no tool send"
+    (should= ["All green."]
+             (map :text (posts-for-turns! "dedupe-3" [[{:name "gchat__spaces" :arguments {}}] "All green."]))))
+
+  (it "still posts the reply when gchat__send went to a different thread"
+    (should= ["All green."]
+             (map :text (posts-for-turns! "dedupe-4"
+                                          [[{:name      "gchat__send"
+                                             :arguments {:space "spaces/ENG" :thread "spaces/ENG/threads/T2" :text "FYI"}}]
+                                           "All green."]))))
+
+  (it "still posts the reply when gchat__send went to a different space"
+    (should= ["All green."]
+             (map :text (posts-for-turns! "dedupe-5"
+                                          [[{:name "gchat__send" :arguments {:space "spaces/OPS" :text "FYI"}}]
+                                           "All green."]))))
+
+  (it "clears the mark at turn end, so the next text-only turn posts once"
+    (log/capture-logs
+      (let [posts (posts-for-turns! "dedupe-6" [[origin-send] "One."] [[] "Two."])]
+        (should= ["Two."] (map :text posts))
+        (should= "spaces/ENG/threads/T1" (:thread (first posts))))))
+  )

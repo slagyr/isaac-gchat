@@ -14,4 +14,9 @@
     (should (re-find #"(?i)what you did" sut/TEXT))
     (should (re-find #"(?i)tools you used" sut/TEXT))
     (should (re-find #"(?i)never include a trace" sut/TEXT)))
+
+  (it "says the answer is delivered automatically and gchat__send is for other threads (isaac-mw27)"
+    (should (re-find #"(?i)delivered to the addressed thread automatically" sut/TEXT))
+    (should (re-find #"gchat__send" sut/TEXT))
+    (should (re-find #"(?i)other threads or spaces" sut/TEXT)))
   )
