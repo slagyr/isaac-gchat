@@ -62,6 +62,20 @@
       (throw (ex-info (str "Chat API get failed: " (:status resp))
                       {:status (:status resp) :body (:body resp) :name name})))))
 
+(defn download-attachment!
+  "GET attachment media and return it as text. Chat attachment media is served
+   by the ordinary v1 resource endpoint with alt=media."
+  [resource]
+  (let [token ((requiring-resolve 'isaac.google.token/token))
+        resp  (-http! {:method  "GET"
+                       :url     (str chat-base "/" resource)
+                       :headers {"Authorization" (str "Bearer " token)}
+                       :query   {:alt "media"}})]
+    (if (<= 200 (:status resp) 299)
+      (:body resp)
+      (throw (ex-info (str "Chat API attachment download failed: " (:status resp))
+                      {:status (:status resp) :body (:body resp) :resource resource})))))
+
 (defn get-space!
   "GET spaces.get — what Chat calls a space and what kind it is. Throws on
    non-2xx so the caller can decide what an unanswerable space is worth."

@@ -3,6 +3,9 @@
     [isaac.api :as api]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.guidance :as guidance]
+    [isaac.comm.gchat.inbound-attachment :as inbound-attachment]
+    [isaac.fs :as fs]
+    [isaac.nexus :as nexus]
     [isaac.comm.gchat.handler :as sut]
     [isaac.comm.gchat.lookup :as lookup]
     [isaac.logger :as log]
@@ -222,3 +225,37 @@
                             (= :gchat/fetch-failed (:event %)))
                       @log/captured-logs)))))
   )
+
+(describe "gchat inbound attachments (isaac-e2zb)"
+  (it "sanitizes a filename, saves the download, and frames it for the session"
+    (let [fs* (fs/mem-fs)]
+      (nexus/-with-nexus {:fs fs*}
+        (with-redefs [chat-api/download-attachment! (constantly "hello")]
+          (should= ["[attachment: note.txt (text/plain, 5) at attachments/1/note.txt]"]
+                   (inbound-attachment/save-all! "/work" "1"
+                                                 [{:contentName "../note.txt" :contentType "text/plain"
+                                                   :attachmentDataRef {:resourceName "a"}}]))
+          (should= "hello" (fs/slurp fs* "/work/attachments/1/note.txt"))))))
+
+  (it "does not save an attachment above the cap"
+    (let [fs* (fs/mem-fs)]
+      (nexus/-with-nexus {:fs fs*}
+        (with-redefs [inbound-attachment/MAX-BYTES 4
+                      chat-api/download-attachment! (constantly "hello")]
+          (should= ["[attachment: report.pdf (too large, not saved)]"]
+                   (inbound-attachment/save-all! "/work" "1"
+                                                 [{:contentName "report.pdf"
+                                                   :attachmentDataRef {:resourceName "a"}}]))
+          (should-not (fs/exists? fs* "/work/attachments/1/report.pdf"))))))
+
+  (it "logs once and frames a failed download while continuing"
+    (let [fs* (fs/mem-fs)]
+      (nexus/-with-nexus {:fs fs*}
+        (with-redefs [chat-api/download-attachment! (fn [_] (throw (ex-info "gone" {})))]
+          (log/capture-logs
+            (should= ["[attachment: report.pdf (download failed)]"]
+                     (inbound-attachment/save-all! "/work" "1"
+                                                   [{:contentName "report.pdf"
+                                                     :attachmentDataRef {:resourceName "a"}}]))
+            (should= 1 (count (filter #(= :gchat.attachment/download-failed (:event %))
+                                       @log/captured-logs)))))))))

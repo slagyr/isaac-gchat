@@ -8,6 +8,7 @@
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.gate :as gate]
     [isaac.comm.gchat.guidance :as guidance]
+    [isaac.comm.gchat.inbound-attachment :as inbound-attachment]
     [isaac.comm.gchat.lookup :as lookup]
     [isaac.comm.gchat.self :as self]
     [isaac.comm.gchat.transcript :as transcript]
@@ -243,9 +244,16 @@
                         (map canon/rendered-line history)
                         ["" CONTEXT-END "" current])))))
 
-(defn- dispatch-to! [decision session-key input ch]
+(defn- attachment-lines [cwd decision]
+  (let [cwd cwd
+        message-id (last (str/split (:message-name decision) #"/"))]
+    (when (and (seq cwd) (seq (:attachment decision)))
+      (inbound-attachment/save-all! cwd message-id (:attachment decision)))))
+
+(defn- dispatch-to! [decision session-key cwd input ch]
   (api/dispatch! (cond-> {:session-key session-key
-                          :input       input
+                          :input       (let [lines (attachment-lines cwd decision)]
+                                         (if (seq lines) (str input "\n" (str/join "\n" lines)) input))
                           :origin      (origin decision)
                           :crew        (:crew decision)
                           :config      (full-config)
@@ -259,8 +267,8 @@
         keys*    (session-keys decision)]
     (transcript/append! (:space decision) (transcript/entry decision))
     (doseq [session-key keys*]
-      (ensure-session! decision session-key)
-      (dispatch-to! decision session-key input ch))
+      (let [session (ensure-session! decision session-key)]
+        (dispatch-to! decision session-key (or (:cwd session) (:cwd (api/get-session session-key)) (nexus/get :root)) input ch)))
     ;; Isaac answered here: the next mention's context starts after this line.
     (when (seq keys*)
       (transcript/append! (:space decision)
@@ -280,7 +288,9 @@
         (let [message  (chat-api/get-message! name)
               slice    (-load-cfg)
               opts     (decide-opts (full-config) slice message)
-              decision (cond-> (assoc (gate/decide slice message opts) :message-name (:name message))
+              decision (cond-> (assoc (gate/decide slice message opts)
+                                        :message-name (:name message)
+                                        :attachment (:attachment message))
                          (get-in opts [:space-info :invited?]) (assoc :invited? true))]
           (cond
             (= :log (:action decision))

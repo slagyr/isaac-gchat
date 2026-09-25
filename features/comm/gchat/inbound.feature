@@ -646,7 +646,6 @@ Feature: Google Chat inbound gate
   # the session's working directory before the turn, and the framed input
   # names it so the model can read it with the file tools.
 
-  @wip
   Scenario: an attachment on the addressing message is saved under the session working directory and the turn is told (isaac-e2zb)
     Given the crew "main" allows tools: "fs/*"
     And config:

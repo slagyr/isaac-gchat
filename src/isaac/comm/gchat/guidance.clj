@@ -22,4 +22,4 @@
        "still end the turn with it, even if it is short. "
        "If asked what you did or how you know something, "
        "summarise the tools you used from the transcript in plain words; otherwise "
-       "never include a trace or list of tools in your reply."))
+       "never include a trace or list of tools in your reply. Files people attach are saved under attachments/ in your working directory and listed with the message; read them with the file tools. You cannot view images yet — say so if asked what an image shows."))

@@ -41,6 +41,7 @@
     (gchat-lookup/forget!)
     (g/dissoc! :gchat-comm)
     (g/dissoc! :gchat-http-stub)
+    (g/dissoc! :gchat-attachments)
     (g/dissoc! :gchat-known-spaces)
     (g/dissoc! :gchat-refused-spaces-get)
     (g/dissoc! :gchat-refused-create)
@@ -203,6 +204,9 @@
       (re-find #"/reactions/\d+$" (str url))
       {:status 200 :body {}}
 
+      (contains? (g/get :gchat-attachments) (second (re-find #"/v1/(.*)" (str url))))
+      {:status 200 :body (get (g/get :gchat-attachments) (second (re-find #"/v1/(.*)" (str url))))}
+
       ;; media.upload — each upload answers its own attachmentDataRef, which
       ;; the message then references (isaac-vlxz).
       (str/ends-with? (str url) "/attachments:upload")
@@ -300,6 +304,17 @@
 (defn chat-api-returns [name table]
   (let [msg (assoc (nest-dotted (table-map table)) :name name)]
     (g/update! :gchat-api-messages (fnil assoc {}) name msg)))
+
+(defn chat-api-serves-attachment [resource content]
+  (g/update! :gchat-attachments (fnil assoc {}) resource content))
+
+(defn attachment-file-contains [path content]
+  (let [fs* (feature-fs)
+        cwd (some (fn [session]
+                    (let [candidate (str (:cwd session) "/" path)]
+                      (when (fs/exists? fs* candidate) (:cwd session))))
+                  (session-store/list-sessions (session-store/registered-store)))]
+    (g/should= content (fs/slurp fs* (str cwd "/" path)))))
 
 (defn- stub-get-message! [name]
   (or (get (g/get :gchat-api-messages) name)
@@ -446,6 +461,9 @@
 (defgiven #"the Chat API knows space \"([^\"]+)\":"
   isaac.gchat-steps/chat-api-knows-space)
 
+(defgiven #"the Chat API serves attachment \"([^\"]+)\" with content \"([^\"]*)\""
+  isaac.gchat-steps/chat-api-serves-attachment)
+
 (defthen #"session \"([^\"]+)\" is tagged \"([^\"]+)\""
   isaac.gchat-steps/session-is-tagged)
 
@@ -454,6 +472,9 @@
 
 (defthen "no reaction calls were made"
   isaac.gchat-steps/no-reaction-calls-were-made)
+
+(defthen #"the file \"([^\"]+)\" under the session working directory contains \"([^\"]*)\""
+  isaac.gchat-steps/attachment-file-contains)
 
 (defgiven "gchat outbound comm is registered"
   isaac.gchat-steps/gchat-outbound-comm-registered)
