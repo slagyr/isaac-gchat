@@ -673,7 +673,6 @@ Feature: Google Chat inbound gate
   # Chat serves attachment bytes from the media endpoint (isaac-468y). The e2zb stub
   # accepted any URL, so the wrong path went unnoticed until yopp got a 404.
 
-  @wip
   Scenario: an attachment is downloaded from Chat's media endpoint (isaac-468y)
     Given the crew "main" allows tools: "fs/*"
     And config:

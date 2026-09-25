@@ -62,13 +62,17 @@
       (throw (ex-info (str "Chat API get failed: " (:status resp))
                       {:status (:status resp) :body (:body resp) :name name})))))
 
+(defn -attachment-media-url
+  "Builds Chat's media.download endpoint while preserving the opaque resource name."
+  [resource]
+  (str chat-base "/media/" resource))
+
 (defn download-attachment!
-  "GET attachment media and return it as text. Chat attachment media is served
-   by the ordinary v1 resource endpoint with alt=media."
+  "GET attachment media and return it as text from Chat's v1/media endpoint."
   [resource]
   (let [token ((requiring-resolve 'isaac.google.token/token))
         resp  (-http! {:method  "GET"
-                       :url     (str chat-base "/" resource)
+                       :url     (-attachment-media-url resource)
                        :headers {"Authorization" (str "Bearer " token)}
                        :query   {:alt "media"}})]
     (if (<= 200 (:status resp) 299)

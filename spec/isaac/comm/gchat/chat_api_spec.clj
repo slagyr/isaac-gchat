@@ -5,6 +5,10 @@
 
 (describe "gchat chat-api outbound"
 
+  (it "builds a media download URL without re-encoding the Chat resource"
+    (should= "https://chat.googleapis.com/v1/media/spaces/IA+2/attachments/att/2=raw"
+             (sut/-attachment-media-url "spaces/IA+2/attachments/att/2=raw")))
+
   (it "POSTs a thread reply with messageReplyOption and bearer"
     (let [captured (atom nil)]
       (with-redefs [sut/-http!

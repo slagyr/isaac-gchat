@@ -204,8 +204,8 @@
       (re-find #"/reactions/\d+$" (str url))
       {:status 200 :body {}}
 
-      (contains? (g/get :gchat-attachments) (second (re-find #"/v1/(.*)" (str url))))
-      {:status 200 :body (get (g/get :gchat-attachments) (second (re-find #"/v1/(.*)" (str url))))}
+      (contains? (g/get :gchat-attachments) (second (re-find #"/v1/media/(.*)" (str url))))
+      {:status 200 :body (get (g/get :gchat-attachments) (second (re-find #"/v1/media/(.*)" (str url))))}
 
       ;; media.upload — each upload answers its own attachmentDataRef, which
       ;; the message then references (isaac-vlxz).
