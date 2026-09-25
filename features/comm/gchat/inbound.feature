@@ -641,3 +641,32 @@ Feature: Google Chat inbound gate
       | message | user         | #".*are you there\?.*" |
       | message | assistant    | Here.                  |
     And the session count is 1
+
+  # Inbound attachments (isaac-e2zb): a file a person attaches is downloaded under
+  # the session's working directory before the turn, and the framed input
+  # names it so the model can read it with the file tools.
+
+  @wip
+  Scenario: an attachment on the addressing message is saved under the session working directory and the turn is told (isaac-e2zb)
+    Given the crew "main" allows tools: "fs/*"
+    And config:
+      | comms.gchat.gchat/spaces.spaces/IA1.name | inbound-attach |
+      | comms.gchat.gchat/spaces.spaces/IA1.crew | main           |
+    And the Chat API returns message "spaces/IA1/messages/1":
+      | sender.email                                | ada@tonotop.com                        |
+      | thread.name                                 | spaces/IA1/threads/T1                  |
+      | text                                        | @Isaac what is this?                   |
+      | annotations.mention                         | users/yopp                             |
+      | attachment.0.contentName                    | report.pdf                             |
+      | attachment.0.contentType                    | application/pdf                        |
+      | attachment.0.attachmentDataRef.resourceName | spaces/IA1/attachments/att-1           |
+    And the Chat API serves attachment "spaces/IA1/attachments/att-1" with content "%PDF-1.4 stub"
+    And the following model responses are queued:
+      | model | type | content        |
+      | echo  | text | A PDF, got it. |
+    When Google Chat delivers a message event for "spaces/IA1/messages/1"
+    Then the file "attachments/1/report.pdf" under the session working directory contains "%PDF-1.4 stub"
+    And session "gchat-tonotop-inbound-attach" has transcript matching:
+      | type    | message.role | message.content                                                        |
+      | message | user         | #"(?s).*\[attachment: report\.pdf \(application/pdf, .*\) at attachments/1/report\.pdf\].*" |
+      | message | assistant    | A PDF, got it.                                                         |
