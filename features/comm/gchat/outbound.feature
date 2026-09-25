@@ -536,6 +536,7 @@ Feature: Google Chat outbound
     And the delivery worker ticks
     Then 1 outbound HTTP requests to "https://chat.googleapis.com/upload/v1/spaces/AT1/attachments:upload" were made
     And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/AT1/messages" matches:
+      | #index                                           | 1                     |
       | body.thread.name                                 | spaces/AT1/threads/T1 |
       | body.text                                        | Here is the report.   |
       | body.attachment.0.attachmentDataRef.resourceName | #".+"                 |
