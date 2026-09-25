@@ -255,6 +255,7 @@
                           :input       (let [lines (attachment-lines cwd decision)]
                                          (if (seq lines) (str input "\n" (str/join "\n" lines)) input))
                           :origin      (origin decision)
+                          :coalesce-key (:thread decision)
                           :crew        (:crew decision)
                           :config      (full-config)
                           :guidance    guidance/TEXT}

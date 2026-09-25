@@ -42,6 +42,18 @@
           (should= "gchat-spaces-eng" (:session-key @dispatched))
           (should (some #(= :gchat/message-routed (:event %)) @log/captured-logs))))))
 
+  (it "uses the Chat thread as the dispatch coalesce key"
+    (let [dispatched (atom nil)]
+      (with-redefs [sut/-load-cfg         (fn [] (get-in cfg [:comms :gchat]))
+                    lookup/space-info     (fn [_ _ _] {})
+                    chat-api/get-message! (fn [_] mention-msg)
+                    api/get-session       (fn [_] nil)
+                    api/create-session!   (fn [id _] {:name id})
+                    api/dispatch!         (fn [req] (reset! dispatched req))]
+        (log/capture-logs
+          (sut/handle-event {:data {:message {:name "spaces/ENG/messages/1"}}})
+          (should= "spaces/ENG/threads/T1" (:coalesce-key @dispatched))))))
+
   (it "marks the input with the message's thread and carries the standing guidance"
     (let [dispatched (atom nil)]
       (with-redefs [sut/-load-cfg         (fn [] (get-in cfg [:comms :gchat]))

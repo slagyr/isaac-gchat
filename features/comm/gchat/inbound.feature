@@ -698,7 +698,6 @@ Feature: Google Chat inbound gate
   # Waiting room + consolidation (isaac-xoqn): a session mid-turn does not refuse the
   # next messages; prompts in one thread are answered together.
 
-  @wip
   Scenario: three quick messages in one DM thread get one consolidated reply (isaac-xoqn)
     Given config:
       | comms.gchat.gchat/spaces.spaces/DMQ.name | dm-queue |
