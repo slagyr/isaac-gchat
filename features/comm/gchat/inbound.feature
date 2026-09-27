@@ -702,7 +702,7 @@ Feature: Google Chat inbound gate
     Given config:
       | comms.gchat.gchat/spaces.spaces/DMQ.name | dm-queue |
       | comms.gchat.gchat/spaces.spaces/DMQ.crew | main     |
-    And session "gchat-spaces-DMQ" is in flight
+    And session "gchat-spaces-dmq" is in flight
     And the Chat API returns message "spaces/DMQ/messages/1":
       | sender.email        | ada@tonotop.com        |
       | thread.name         | spaces/DMQ/threads/T1  |
@@ -724,12 +724,12 @@ Feature: Google Chat inbound gate
     When Google Chat delivers a message event for "spaces/DMQ/messages/1"
     And Google Chat delivers a message event for "spaces/DMQ/messages/2"
     And Google Chat delivers a message event for "spaces/DMQ/messages/3"
-    And the in-flight turn on session "gchat-spaces-DMQ" ends
+    And the in-flight turn on session "gchat-spaces-dmq" ends
     Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/DMQ/messages" were made
-    And session "gchat-spaces-DMQ" has transcript matching:
+    And session "gchat-spaces-dmq" has transcript matching:
       | type    | message.role | message.content                             |
       | message | user         | #"(?s).*first.*second.*third.*"             |
       | message | assistant    | All three, answered.                        |
     And the log has entries matching:
       | level | event           | session          | count |
-      | :info | :turn/coalesced | gchat-spaces-DMQ | 3     |
+      | :info | :turn/coalesced | gchat-spaces-dmq | 3     |
