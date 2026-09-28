@@ -7,22 +7,22 @@
 (describe "a space entry as session frequencies"
 
   (it "keeps the canonical per-space session when the entry selects nothing"
-    (should= {:create :if-missing :reach :one :prefer :recent
+    (should= {:create :if-missing :prefer :recent
               :session ["gchat-spaces-ENG"]}
              (sut/space->frequencies {:name "Engineering"} "gchat-spaces-ENG")))
 
   (it "selects by tags, with the defaults hail uses"
-    (should= {:session-tags [:ops] :create :if-missing :reach :one :prefer :recent}
+    (should= {:session-tags [:ops] :create :if-missing :prefer :recent}
              (sut/space->frequencies {:session-tags [:ops]} "gchat-spaces-ENG")))
 
-  (it "carries crew, reach, prefer and create through as written"
-    (should= {:session-tags [:ops] :crew "yopp" :reach :all :prefer :oldest :create :never}
+  (it "carries crew, prefer and create through as written"
+    (should= {:session-tags [:ops] :crew "yopp" :prefer :oldest :create :never}
              (sut/space->frequencies {:session-tags [:ops] :crew "yopp"
-                                      :reach :all :prefer :oldest :create :never}
+                                      :prefer :oldest :create :never}
                                      "gchat-spaces-ENG")))
 
   (it "pins an explicit session as an exact selector"
-    (should= {:session ["ops-room"] :create :if-missing :reach :one :prefer :recent}
+    (should= {:session ["ops-room"] :create :if-missing :prefer :recent}
              (sut/space->frequencies {:session "ops-room"} "gchat-spaces-ENG")))
 
   (it "prefers tags over an explicit session when an entry names both"

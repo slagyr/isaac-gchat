@@ -82,14 +82,14 @@
 (def FREQUENCY-KEYS
   "What a space entry may say about which session hears it — the agent's
    vocabulary, the same one hail speaks (isaac-tund)."
-  [:session :session-tags :crew :reach :prefer :create])
+  [:session :session-tags :crew :prefer :create])
 
 (defn space->frequencies
   "A space entry's selection fields as session frequencies. An entry that
    names neither tags nor a session keeps the canonical per-space id."
   [space-cfg default-key]
   (let [entry (select-keys (or space-cfg {}) FREQUENCY-KEYS)
-        base  {:create :if-missing :reach :one :prefer :recent}]
+        base  {:create :if-missing :prefer :recent}]
     (cond
       (seq (:session-tags entry))
       (merge base entry)
@@ -101,25 +101,15 @@
       (merge base (dissoc entry :session) {:session [default-key]}))))
 
 (defn- session-keys
-  "Which sessions this message goes to. :reach :all fans out over every
-   session the entry's tags and crew match; :one resolves a single target the
-   way hail does, creating it when the entry allows."
+  "Select one session using the entry's selectors, creating it when allowed."
   [decision]
   (let [store (try (session-store/registered-store) (catch Exception _ nil))
-        freq  (space->frequencies (:space-cfg decision) (:session-key decision))
-]
+        freq  (space->frequencies (:space-cfg decision) (:session-key decision))]
     (cond
       ;; No store to select against — the canonical per-space session is the
       ;; answer, and routing never waits on selection.
       (nil? store)
       [(:session-key decision)]
-
-      (= :all (:reach freq))
-      (let [matches (frequencies/matching-sessions freq (session-store/list-sessions store))
-            keys*   (vec (keep :name matches))]
-        (if (seq keys*)
-          keys*
-          [(:session-key decision)]))
 
       :else
       (let [target (frequencies/resolve-session-targets freq store)]

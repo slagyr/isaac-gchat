@@ -1,5 +1,5 @@
 {:id          :isaac.comm.gchat
- :version     "0.2.17"
+ :version     "0.2.18"
  :builtin?    true
  :factory     isaac.comm.gchat.module/create-module
  :description "Google Chat comm for Isaac — inbound gate, routing and dispatch for spaces and DMs; outbound replies and sends. Built on isaac-google."
@@ -45,12 +45,9 @@
                                                                                    :description "Tags the target session must carry (AND)"}
                                                                     :crew         {:type :string
                                                                                    :description "Crew for session selection or creation."}
-                                                                    :reach        {:type :keyword
-                                                                                   :validations [[:one-of? :one :all]]
-                                                                                   :description "How many sessions to target"}
                                                                     :prefer       {:type :keyword
                                                                                    :validations [[:one-of? :recent :oldest]]
-                                                                                   :description "Multi-match tiebreak when :reach is :one"}
+                                                                                   :description "Multi-match tiebreak"}
                                                                     :create       {:type :keyword
                                                                                    :validations [[:one-of? :never :if-missing :always]]
                                                                                    :description "Create policy"}

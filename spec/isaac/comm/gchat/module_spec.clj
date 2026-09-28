@@ -3,7 +3,7 @@
     [clojure.edn :as edn]
     [isaac.module.protocol]
     [isaac.comm.gchat.module :as sut]
-    [speclj.core :refer [describe it should should=]]))
+    [speclj.core :refer [describe it should should-not should=]]))
 
 (def manifest
   (edn/read-string (slurp "resources/isaac-manifest.edn")))
@@ -15,6 +15,10 @@
 
   (it "declares its module id"
     (should= :isaac.comm.gchat (:id manifest)))
+
+  (it "does not expose reach as a space selection option"
+    (should-not (contains? (get-in manifest [:isaac.agent/comm :gchat :extra-schema
+                                            :gchat/spaces :value-spec :schema]) :reach)))
 
   (it "contributes the gchat comm impl"
     (should= 'isaac.comm.gchat (get-in manifest [:isaac.agent/comm :gchat :namespace])))
