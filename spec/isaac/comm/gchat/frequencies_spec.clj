@@ -8,7 +8,7 @@
 
   (it "keeps the canonical per-space session when the entry selects nothing"
     (should= {:create :if-missing :reach :one :prefer :recent
-              :default-session-key "gchat-spaces-ENG"}
+              :session ["gchat-spaces-ENG"]}
              (sut/space->frequencies {:name "Engineering"} "gchat-spaces-ENG")))
 
   (it "selects by tags, with the defaults hail uses"

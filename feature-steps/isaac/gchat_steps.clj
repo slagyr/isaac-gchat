@@ -28,7 +28,8 @@
     [isaac.nexus :as nexus]
     [isaac.session.session-steps :as session-steps]
     [isaac.session.store.memory :as memory-store]
-    [isaac.session.store.spi :as session-store]))
+    [isaac.session.store.spi :as session-store]
+    [isaac.turn.worker :as turn-worker]))
 
 (helper! isaac.gchat-steps)
 
@@ -415,6 +416,12 @@
                 chat-api/-http!       stub-http!
                 google-token/token    stub-google-token]
     (f)))
+
+(defn in-flight-turn-ends [session-key]
+  (session-store/clear-in-flight! (session-store/registered-store) (#'session-store/name->id session-key))
+  (with-chat-stubs #(turn-worker/tick!)))
+
+(defwhen #"the in-flight turn on session \"([^\"]+)\" ends" isaac.gchat-steps/in-flight-turn-ends)
 
 (defn google-chat-delivers [name]
   (ensure-gchat-factory!)

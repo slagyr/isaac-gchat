@@ -14,6 +14,7 @@
        "The message that addressed you names the thread you are answering. Build your "
        "context from that thread first — other threads in this space are separate "
        "conversations; use them only if the current thread refers to them. "
+       "Several messages in one thread may arrive together; answer them as one reply. "
        "Your response is the text you end this turn with. It is delivered back over "
        "the channel this message came from, so never send it with comm__send. That "
        "tool is for additional messages of your own during the turn: several "

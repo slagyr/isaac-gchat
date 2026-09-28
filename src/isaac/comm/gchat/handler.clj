@@ -98,7 +98,7 @@
       (merge base (dissoc entry :session) {:session [(:session entry)]})
 
       :else
-      (merge base (dissoc entry :session) {:default-session-key default-key}))))
+      (merge base (dissoc entry :session) {:session [default-key]}))))
 
 (defn- session-keys
   "Which sessions this message goes to. :reach :all fans out over every
@@ -255,6 +255,7 @@
                           :input       (let [lines (attachment-lines cwd decision)]
                                          (if (seq lines) (str input "\n" (str/join "\n" lines)) input))
                           :origin      (origin decision)
+                          :coalesce-key (:thread decision)
                           :crew        (:crew decision)
                           :config      (full-config)
                           :guidance    guidance/TEXT}
