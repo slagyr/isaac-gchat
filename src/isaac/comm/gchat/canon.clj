@@ -25,7 +25,7 @@
   8)
 
 (defn slug
-  "Lower case, every run of anything else a hyphen — `isaac.session.store`'s
+  "Lower case, every run of anything else a hyphen — `isaac.agent.session.store`'s
    own rule, spelled out so the name chosen here is the name it gets."
   [s]
   (-> (str (or s ""))

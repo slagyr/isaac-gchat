@@ -14,11 +14,11 @@
    the subscription it creates uses that organization's token and its topic
    (isaac-1zkz)."
   (:require
-    [isaac.config.loader :as loader]
-    [isaac.config.root :as root]
-    [isaac.fs :as fs]
+    [isaac.foundation.config.loader :as loader]
+    [isaac.foundation.config.root :as root]
+    [isaac.foundation.fs :as fs]
     [isaac.google.tenants :as tenants]
-    [isaac.nexus :as nexus]))
+    [isaac.foundation.nexus :as nexus]))
 
 (def KEY
   "The one Chat subscription an organization needs."

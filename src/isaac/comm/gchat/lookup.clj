@@ -15,7 +15,7 @@
   (:require
     [clojure.string :as str]
     [isaac.comm.gchat.chat-api :as chat-api]
-    [isaac.logger :as log]))
+    [isaac.foundation.logger :as log]))
 
 (defonce ^:private known* (atom {}))
 

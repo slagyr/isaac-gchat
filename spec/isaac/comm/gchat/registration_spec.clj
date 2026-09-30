@@ -1,7 +1,7 @@
 (ns isaac.comm.gchat.registration-spec
   (:require
     [isaac.comm.gchat.registration :as sut]
-    [isaac.config.loader :as loader]
+    [isaac.foundation.config.loader :as loader]
     [isaac.google.events :as events]
     [isaac.google.tenants :as tenants]
     [speclj.core :refer :all]))

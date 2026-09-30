@@ -1,37 +1,37 @@
-(ns isaac.gchat-steps
+(ns isaac.comm.gchat.gchat-steps
   "Google Chat inbound + outbound feature steps."
   (:require
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [gherclj.core :as g :refer [defgiven defthen defwhen helper!]]
-    [isaac.api :as api]
-    [isaac.comm.factory :as comm-factory]
+    [isaac.agent.api :as api]
+    [isaac.agent.comm.factory :as comm-factory]
     [isaac.comm.gchat :as gchat]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.guidance :as guidance]
     [isaac.comm.gchat.handler :as handler]
     [isaac.comm.gchat.lookup :as gchat-lookup]
     [isaac.comm.gchat.self :as gchat-self]
-    [isaac.comm.protocol :as comm]
-    [isaac.comm.registry :as comm-registry]
-    [isaac.config.api :as config]
-    [isaac.config.loader :as loader]
-    [isaac.fs :as fs]
+    [isaac.agent.comm.protocol :as comm]
+    [isaac.agent.comm.registry :as comm-registry]
+    [isaac.foundation.config.api :as config]
+    [isaac.foundation.config.loader :as loader]
+    [isaac.foundation.fs :as fs]
     [isaac.google.people :as people]
     [isaac.google.tenants :as tenants]
     [isaac.google.token :as google-token]
-    [isaac.llm.api.grover :as grover]
-    [isaac.llm.auth.store :as auth-store]
-    [isaac.logger :as log]
-    [isaac.module.discovery :as discovery]
-    [isaac.nexus :as nexus]
-    [isaac.session.session-steps :as session-steps]
-    [isaac.session.store.memory :as memory-store]
-    [isaac.session.store.spi :as session-store]
-    [isaac.turn.worker :as turn-worker]))
+    [isaac.agent.llm.api.grover :as grover]
+    [isaac.agent.llm.auth.store :as auth-store]
+    [isaac.foundation.logger :as log]
+    [isaac.foundation.module.discovery :as discovery]
+    [isaac.foundation.nexus :as nexus]
+    [isaac.agent.session.session-steps :as session-steps]
+    [isaac.agent.session.store.memory :as memory-store]
+    [isaac.agent.session.store.spi :as session-store]
+    [isaac.agent.turn.worker :as turn-worker]))
 
-(helper! isaac.gchat-steps)
+(helper! isaac.comm.gchat.gchat-steps)
 
 (declare restore-chat-http!)
 
@@ -419,9 +419,13 @@
 
 (defn in-flight-turn-ends [session-key]
   (session-store/clear-in-flight! (session-store/registered-store) (#'session-store/name->id session-key))
-  (with-chat-stubs #(turn-worker/tick!)))
+  ;; tick! only claims and starts the runnable turn on its own thread now
+  ;; (isaac-e9jl); await-idle! blocks until it (and anything it chains) has
+  ;; actually finished. Both stay inside with-chat-stubs's with-redefs scope
+  ;; so the started turn's own HTTP call still hits the stub, not the network.
+  (with-chat-stubs #(do (turn-worker/tick!) (turn-worker/await-idle!))))
 
-(defwhen #"the in-flight turn on session \"([^\"]+)\" ends" isaac.gchat-steps/in-flight-turn-ends)
+(defwhen #"the in-flight turn on session \"([^\"]+)\" ends" isaac.comm.gchat.gchat-steps/in-flight-turn-ends)
 
 (defn google-chat-delivers [name]
   (ensure-gchat-factory!)
@@ -463,58 +467,58 @@
           (comm/send! comm record))))))
 
 (defgiven #"the Chat API returns message \"([^\"]+)\":"
-  isaac.gchat-steps/chat-api-returns)
+  isaac.comm.gchat.gchat-steps/chat-api-returns)
 
 (defgiven #"the Chat API knows space \"([^\"]+)\":"
-  isaac.gchat-steps/chat-api-knows-space)
+  isaac.comm.gchat.gchat-steps/chat-api-knows-space)
 
 (defgiven #"the Chat API serves attachment \"([^\"]+)\" with content \"([^\"]*)\""
-  isaac.gchat-steps/chat-api-serves-attachment)
+  isaac.comm.gchat.gchat-steps/chat-api-serves-attachment)
 
 (defthen #"session \"([^\"]+)\" is tagged \"([^\"]+)\""
-  isaac.gchat-steps/session-is-tagged)
+  isaac.comm.gchat.gchat-steps/session-is-tagged)
 
 (defthen #"^(\d+) outbound HTTP requests? to \"([^\"]+)\" (?:was|were) made$"
-  isaac.gchat-steps/outbound-http-count)
+  isaac.comm.gchat.gchat-steps/outbound-http-count)
 
 (defthen "no reaction calls were made"
-  isaac.gchat-steps/no-reaction-calls-were-made)
+  isaac.comm.gchat.gchat-steps/no-reaction-calls-were-made)
 
 (defthen #"the file \"([^\"]+)\" under the session working directory contains \"([^\"]*)\""
-  isaac.gchat-steps/attachment-file-contains)
+  isaac.comm.gchat.gchat-steps/attachment-file-contains)
 
 (defgiven "gchat outbound comm is registered"
-  isaac.gchat-steps/gchat-outbound-comm-registered)
+  isaac.comm.gchat.gchat-steps/gchat-outbound-comm-registered)
 
 (defgiven #"gchat comm \"([^\"]+)\" is registered"
-  isaac.gchat-steps/gchat-comm-registered)
+  isaac.comm.gchat.gchat-steps/gchat-comm-registered)
 
 (defgiven #"the google auth store for organization \"([^\"]+)\" has access \"([^\"]+)\" and refresh \"([^\"]+)\""
-  isaac.gchat-steps/google-auth-store-for-organization)
+  isaac.comm.gchat.gchat-steps/google-auth-store-for-organization)
 
 (defgiven #"the Chat API has no direct message space with \"([^\"]+)\""
-  isaac.gchat-steps/chat-api-has-no-dm)
+  isaac.comm.gchat.gchat-steps/chat-api-has-no-dm)
 
 (defgiven #"the Chat API refuses spaces\.get for \"([^\"]+)\" with 403"
-  isaac.gchat-steps/chat-api-refuses-spaces-get)
+  isaac.comm.gchat.gchat-steps/chat-api-refuses-spaces-get)
 
 (defgiven #"the Chat API refuses messages\.create in \"([^\"]+)\" with 403"
-  isaac.gchat-steps/chat-api-refuses-create)
+  isaac.comm.gchat.gchat-steps/chat-api-refuses-create)
 
 (defgiven #"the Chat API creates space \"([^\"]+)\" on setup"
-  isaac.gchat-steps/chat-api-creates-space-on-setup)
+  isaac.comm.gchat.gchat-steps/chat-api-creates-space-on-setup)
 
 (defwhen #"Google Chat delivers a message event for \"([^\"]+)\""
-  isaac.gchat-steps/google-chat-delivers)
+  isaac.comm.gchat.gchat-steps/google-chat-delivers)
 
 (defwhen "gchat comm send! is invoked with:"
-  isaac.gchat-steps/gchat-comm-send!)
+  isaac.comm.gchat.gchat-steps/gchat-comm-send!)
 
 (defthen #"exactly (\d+) log entr(?:y|ies) has event \"([^\"]+)\""
-  isaac.gchat-steps/log-entry-count)
+  isaac.comm.gchat.gchat-steps/log-entry-count)
 
 (defthen #"session \"([^\"]+)\" has origin:"
-  isaac.gchat-steps/session-origin-matches)
+  isaac.comm.gchat.gchat-steps/session-origin-matches)
 
 (defthen "the last LLM request carries the gchat thread guidance exactly once"
-  isaac.gchat-steps/last-llm-request-carries-guidance-once)
+  isaac.comm.gchat.gchat-steps/last-llm-request-carries-guidance-once)

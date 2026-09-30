@@ -1,14 +1,14 @@
 (ns isaac.comm.gchat-spec
   (:require
     [clojure.string :as str]
-    [isaac.comm.delivery.queue :as delivery-queue]
+    [isaac.agent.comm.delivery.queue :as delivery-queue]
     [isaac.comm.gchat :as sut]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.transcript :as transcript]
-    [isaac.comm.protocol :as comm]
-    [isaac.fs :as fs]
-    [isaac.logger :as log]
-    [isaac.nexus :as nexus]
+    [isaac.agent.comm.protocol :as comm]
+    [isaac.foundation.fs :as fs]
+    [isaac.foundation.logger :as log]
+    [isaac.foundation.nexus :as nexus]
     [speclj.core :refer :all]))
 
 (defn- comm-with [slice]

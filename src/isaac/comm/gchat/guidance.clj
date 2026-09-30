@@ -5,7 +5,7 @@
    read it — group by the [thread:...] markers on each line, answer the
    thread that was addressed, and treat other threads as separate
    conversations. It rides the charge's :guidance, which the prompt builder
-   frames into the current user turn exactly once (isaac.charge, hail's own
+   frames into the current user turn exactly once (isaac.agent.charge, hail's own
    metadata preamble uses the same seam) — never the system prompt, and never
    present on a non-gchat turn, since only gchat sets it.")
 

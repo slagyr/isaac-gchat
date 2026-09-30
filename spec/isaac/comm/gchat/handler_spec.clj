@@ -1,14 +1,14 @@
 (ns isaac.comm.gchat.handler-spec
   (:require
-    [isaac.api :as api]
+    [isaac.agent.api :as api]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.guidance :as guidance]
     [isaac.comm.gchat.inbound-attachment :as inbound-attachment]
-    [isaac.fs :as fs]
-    [isaac.nexus :as nexus]
+    [isaac.foundation.fs :as fs]
+    [isaac.foundation.nexus :as nexus]
     [isaac.comm.gchat.handler :as sut]
     [isaac.comm.gchat.lookup :as lookup]
-    [isaac.logger :as log]
+    [isaac.foundation.logger :as log]
     [speclj.core :refer :all]))
 
 (def cfg

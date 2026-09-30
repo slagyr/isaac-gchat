@@ -1,4 +1,4 @@
-(ns isaac.features-main
+(ns isaac.comm.gchat.features-main
   "Entry point for `clojure -M:features`.
 
    gherclj.main/-main only calls System/exit when the run fails. On a green

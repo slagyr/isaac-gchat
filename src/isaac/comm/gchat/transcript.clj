@@ -10,9 +10,9 @@
   (:require
     [clojure.edn :as edn]
     [clojure.string :as str]
-    [isaac.config.root :as root]
-    [isaac.fs :as fs]
-    [isaac.nexus :as nexus]))
+    [isaac.foundation.config.root :as root]
+    [isaac.foundation.fs :as fs]
+    [isaac.foundation.nexus :as nexus]))
 
 (def LIMIT
   "Lines kept per space. A mention reads at most CONTEXT-LINES of them; the

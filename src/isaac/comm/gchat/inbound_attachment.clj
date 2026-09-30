@@ -3,8 +3,8 @@
   (:require
     [clojure.string :as str]
     [isaac.comm.gchat.chat-api :as chat-api]
-    [isaac.fs :as fs]
-    [isaac.logger :as log]))
+    [isaac.foundation.fs :as fs]
+    [isaac.foundation.logger :as log]))
 
 (def MAX-BYTES (* 25 1024 1024))
 

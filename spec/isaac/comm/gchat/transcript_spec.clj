@@ -1,8 +1,8 @@
 (ns isaac.comm.gchat.transcript-spec
   (:require
     [isaac.comm.gchat.transcript :as sut]
-    [isaac.fs :as fs]
-    [isaac.nexus :as nexus]
+    [isaac.foundation.fs :as fs]
+    [isaac.foundation.nexus :as nexus]
     [speclj.core :refer :all]))
 
 (def space "spaces/ENG")

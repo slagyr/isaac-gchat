@@ -2,7 +2,7 @@
   (:require
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.lookup :as sut]
-    [isaac.logger :as log]
+    [isaac.foundation.logger :as log]
     [speclj.core :refer :all]))
 
 (defn- asking

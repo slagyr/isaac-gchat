@@ -1,7 +1,7 @@
 (ns isaac.comm.gchat.tenant-spec
   (:require
     [isaac.comm.gchat.tenant :as sut]
-    [isaac.config.loader :as loader]
+    [isaac.foundation.config.loader :as loader]
     [speclj.core :refer :all]))
 
 (def tenanted

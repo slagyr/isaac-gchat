@@ -2,8 +2,8 @@
   "Pub/Sub Chat pointer → fetch → gate → dispatch."
   (:require
     [clojure.string :as str]
-    [isaac.api :as api]
-    [isaac.comm.factory :as comm-factory]
+    [isaac.agent.api :as api]
+    [isaac.agent.comm.factory :as comm-factory]
     [isaac.comm.gchat.canon :as canon]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.gate :as gate]
@@ -12,17 +12,17 @@
     [isaac.comm.gchat.lookup :as lookup]
     [isaac.comm.gchat.self :as self]
     [isaac.comm.gchat.transcript :as transcript]
-    [isaac.comm.registry :as comm-registry]
-    [isaac.config.defaults :as defaults]
-    [isaac.config.loader :as loader]
-    [isaac.config.root :as root]
-    [isaac.fs :as fs]
+    [isaac.agent.comm.registry :as comm-registry]
+    [isaac.agent.config.defaults :as defaults]
+    [isaac.foundation.config.loader :as loader]
+    [isaac.foundation.config.root :as root]
+    [isaac.foundation.fs :as fs]
     [isaac.google.people :as people]
     [isaac.google.tenants :as tenants]
-    [isaac.logger :as log]
-    [isaac.nexus :as nexus]
-    [isaac.session.frequencies :as frequencies]
-    [isaac.session.store.spi :as session-store]))
+    [isaac.foundation.logger :as log]
+    [isaac.foundation.nexus :as nexus]
+    [isaac.agent.frequencies :as frequencies]
+    [isaac.agent.session.store.spi :as session-store]))
 
 (defn- feature-fs []
   (or (fs/instance) (nexus/get :fs) (fs/real-fs)))

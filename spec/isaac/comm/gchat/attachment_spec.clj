@@ -2,8 +2,8 @@
   (:require
     [isaac.comm.gchat.attachment :as sut]
     [isaac.comm.gchat.chat-api :as chat-api]
-    [isaac.fs :as fs]
-    [isaac.nexus :as nexus]
+    [isaac.foundation.fs :as fs]
+    [isaac.foundation.nexus :as nexus]
     [speclj.core :refer :all]))
 
 (describe "gchat outbound attachments (isaac-vlxz)"

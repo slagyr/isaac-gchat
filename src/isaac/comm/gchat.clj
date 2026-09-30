@@ -3,8 +3,8 @@
    and on-reply post as the Google user."
   (:require
     [clojure.string :as str]
-    [isaac.comm.delivery.queue :as delivery-queue]
-    [isaac.comm.factory :as factory]
+    [isaac.agent.comm.delivery.queue :as delivery-queue]
+    [isaac.agent.comm.factory :as factory]
     [isaac.comm.gchat.attachment :as attachment]
     [isaac.comm.gchat.chat-api :as chat-api]
     [isaac.comm.gchat.self :as self]
@@ -12,11 +12,11 @@
     [isaac.comm.gchat.target :as target]
     [isaac.comm.gchat.tenant :as tenant]
     [isaac.comm.gchat.transcript :as transcript]
-    [isaac.comm.protocol :as comm]
-    [isaac.config.loader :as loader]
-    [isaac.config.root :as root]
-    [isaac.logger :as log]
-    [isaac.nexus :as nexus])
+    [isaac.agent.comm.protocol :as comm]
+    [isaac.foundation.config.loader :as loader]
+    [isaac.foundation.config.root :as root]
+    [isaac.foundation.logger :as log]
+    [isaac.foundation.nexus :as nexus])
   (:import
     (java.time Instant ZoneId)
     (java.time.format DateTimeFormatter)))
@@ -218,7 +218,7 @@
 
 (defn -full-cfg
   "The whole process config, not just this comm's slice - needed to read
-   :attention :notify, the same {:comm :target} coords isaac.attention reads
+   :attention :notify, the same {:comm :target} coords isaac.agent.attention reads
    internally (isaac-qry7). Its own seam so a spec can answer without
    installing config."
   []
@@ -304,7 +304,7 @@
 ;; What went wrong — isaac-h5v8. The drive never ends a turn silently: an
 ;; ordinary failure carries :ended-by :error, and provider weather (rate
 ;; limit, auth, a stalled stream) carries :ended-by :provider-unavailable
-;; plus :reason and :retry-at (isaac.drive.weather/stamp-weather!). Both are
+;; plus :reason and :retry-at (isaac.agent.drive.weather/stamp-weather!). Both are
 ;; in-thread notices to the person who sent the message — never a stack
 ;; trace, a raw provider payload or a token. A reply that itself fails to
 ;; post (isaac-qry7, above) is its own case — the thread can't hear a notice
