@@ -8,8 +8,9 @@ replies and sends, and two read-only Chat tools. It is built on top of
 read that module's chapter for how a Google organization's credentials,
 project, and topic are set up; this chapter only covers the Chat-specific
 slice on top of it. It uses "crew", "session", "frequencies", and
-`comm__send` the way `isaac.agent` defines them — read that chapter first
-if you haven't; this one names them once and moves on. Config mechanics
+`comm__send` the way `isaac.agent` defines them (`isaac.agent#frequencies`
+for the frequencies shape and matching rules) — read that chapter first if
+you haven't; this one names them once and moves on. Config mechanics
 (`handbook__configure`, hot reload, `${VAR}` secrets) are `isaac.foundation`'s.
 
 A `gchat` comm has no CLI commands of its own — everything here is a
@@ -137,7 +138,7 @@ of that default, keyed by the space's resource name:
 |---|---|---|
 | `name` | string | Friendly display name (documentation only). |
 | `session` | string | Pin this space to one explicit session id, instead of the canonical per-space name. |
-| `session-tags` | seq of keywords | Route to whichever session carries every listed tag (the same frequencies matching `isaac.agent` uses elsewhere). |
+| `session-tags` | seq of keywords | Route to whichever session carries every listed tag (`isaac.agent#frequencies` matching). |
 | `crew` | string | Crew this space's session runs (or is created) on. |
 | `prefer` | keyword | `recent` or `oldest` — tiebreak when `session-tags` matches more than one session. |
 | `create` | keyword | `never`, `if-missing`, or `always`. |
