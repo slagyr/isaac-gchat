@@ -694,6 +694,37 @@ Feature: Google Chat inbound gate
     Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/media/spaces/IA2/attachments/att-2" were made
     And the file "attachments/1/notes.txt" under the session working directory contains "meeting notes"
 
+  # Inbound attachments as bytes (isaac-ut4u): Chat media is raw bytes. A PNG
+  # starts 0x89, which is not valid UTF-8; the file on disk must be those
+  # bytes, not U+FFFD replacement characters.
+
+  @wip
+  Scenario: a PNG attachment is saved byte-identical and the turn is told (isaac-ut4u)
+    Given the crew "main" allows tools: "fs/*"
+    And config:
+      | comms.gchat.gchat/spaces.spaces/IA3.name | png-attach |
+      | comms.gchat.gchat/spaces.spaces/IA3.crew | main       |
+    And the Chat API returns message "spaces/IA3/messages/1":
+      | sender.email                                | ada@tonotop.com              |
+      | thread.name                                 | spaces/IA3/threads/T1        |
+      | text                                        | @Isaac what is this?         |
+      | annotations.mention                         | users/yopp                   |
+      | attachment.0.contentName                    | badge.png                    |
+      | attachment.0.contentType                    | image/png                    |
+      | attachment.0.attachmentDataRef.resourceName | spaces/IA3/attachments/att-3 |
+    And the Chat API serves attachment "spaces/IA3/attachments/att-3" with bytes "89 50 4E 47 0D 0A 1A 0A"
+    And the following model responses are queued:
+      | model | type | content        |
+      | echo  | text | A PNG, got it. |
+    When Google Chat delivers a message event for "spaces/IA3/messages/1"
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/media/spaces/IA3/attachments/att-3" were made
+    And the outbound HTTP request to "https://chat.googleapis.com/v1/media/spaces/IA3/attachments/att-3" used as bytes
+    And the file "attachments/1/badge.png" under the session working directory has bytes "89 50 4E 47 0D 0A 1A 0A"
+    And session "gchat-spaces-IA3" has transcript matching:
+      | type    | message.role | message.content                                                                              |
+      | message | user         | #"(?s).*\[attachment: badge\.png \(image/png, 8\) at attachments/1/badge\.png\].*"           |
+      | message | assistant    | A PNG, got it.                                                                               |
+
   # Waiting room + consolidation (isaac-xoqn): a session mid-turn does not refuse the
   # next messages; prompts in one thread are answered together.
 
