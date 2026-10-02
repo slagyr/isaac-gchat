@@ -73,7 +73,7 @@
           to     (:gchat/to record)
           space  (or (when (seq to)
                        (resolve-dm-space! to token))
-                     (target/resolve-space cfg (:gchat/space record)))
+                     (target/resolve-space cfg (or (:gchat/space record) (:target record))))
           thread (:gchat/thread record)]
       (cond
         (str/blank? space)

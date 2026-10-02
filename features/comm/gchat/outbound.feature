@@ -545,7 +545,6 @@ Feature: Google Chat outbound
   # attention.clj's enqueue-attention! writes only that generic key, never
   # :gchat/space. Before this bean, gchat ignored it and dead-lettered.
 
-  @wip
   Scenario: send! falls back to the generic :target when no gchat-specific target is given (isaac-ixcm)
     When gchat comm send! is invoked with:
       | path    | value           |
@@ -555,7 +554,6 @@ Feature: Google Chat outbound
       | method    | POST            |
       | body.text | Status, please. |
 
-  @wip
   Scenario: send! prefers gchat/space over the generic :target when both are given (isaac-ixcm)
     When gchat comm send! is invoked with:
       | path        | value      |
@@ -567,7 +565,6 @@ Feature: Google Chat outbound
       | body.text | Pick me. |
     And 0 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/GT9/messages" were made
 
-  @wip
   Scenario: a queued delivery carrying only :target, as an attention notice does, reaches its space instead of dead-lettering (isaac-ixcm)
     Given the isaac EDN file "comm/delivery/pending/GT3.edn" exists with:
       | path     | value                 |

@@ -34,6 +34,23 @@
         (should= "Red alert!" (:text @captured))
         (should= "at-1" (:token @captured)))))
 
+  (it "delivers an attention notice addressed only with the generic target"
+    (let [captured (atom nil)
+          c        (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [opts] (reset! captured opts) {:name "m1"})]
+        (should= {:ok true} (comm/send! c {:target "spaces/GT1" :content "Status, please."}))
+        (should= "spaces/GT1" (:space @captured))
+        (should= "Status, please." (:text @captured)))))
+
+  (it "prefers a gchat space to the generic target"
+    (let [captured (atom nil)
+          c        (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [opts] (reset! captured opts) {:name "m1"})]
+        (should= {:ok true} (comm/send! c {:gchat/space "spaces/GT2" :target "spaces/GT9" :content "Pick me."}))
+        (should= "spaces/GT2" (:space @captured)))))
+
   (it "posts to a resource name with an optional thread"
     (let [captured (atom nil)
           c        (comm-with slice)]
