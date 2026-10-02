@@ -538,3 +538,45 @@ Feature: Google Chat outbound
       | body.thread.name                                 | spaces/AT1/threads/T1 |
       | body.text                                        | Here is the report.   |
       | body.attachment.0.attachmentDataRef.resourceName | #".+"                 |
+
+  # Generic :target fallback (isaac-ixcm). Other comms treat the generic
+  # :target as the recipient of last resort (isaac.agent.comm.delivery.worker/
+  # record-target already documents it as every comm's fallback), and
+  # attention.clj's enqueue-attention! writes only that generic key, never
+  # :gchat/space. Before this bean, gchat ignored it and dead-lettered.
+
+  @wip
+  Scenario: send! falls back to the generic :target when no gchat-specific target is given (isaac-ixcm)
+    When gchat comm send! is invoked with:
+      | path    | value           |
+      | target  | spaces/GT1      |
+      | content | Status, please. |
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/GT1/messages" matches:
+      | method    | POST            |
+      | body.text | Status, please. |
+
+  @wip
+  Scenario: send! prefers gchat/space over the generic :target when both are given (isaac-ixcm)
+    When gchat comm send! is invoked with:
+      | path        | value      |
+      | gchat/space | spaces/GT2 |
+      | target      | spaces/GT9 |
+      | content     | Pick me.   |
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/GT2/messages" matches:
+      | method    | POST     |
+      | body.text | Pick me. |
+    And 0 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/GT9/messages" were made
+
+  @wip
+  Scenario: a queued delivery carrying only :target, as an attention notice does, reaches its space instead of dead-lettering (isaac-ixcm)
+    Given the isaac EDN file "comm/delivery/pending/GT3.edn" exists with:
+      | path     | value                 |
+      | id       | GT3                   |
+      | comm     | :gchat                |
+      | target   | spaces/GT3            |
+      | content  | gchat is unreachable. |
+      | attempts | 0                     |
+    When the delivery worker ticks
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/GT3/messages" matches:
+      | method    | POST                  |
+      | body.text | gchat is unreachable. |
