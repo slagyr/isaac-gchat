@@ -1,6 +1,8 @@
 (ns isaac.comm.gchat.chat-api-spec
   (:require
+    [babashka.http-client :as http]
     [isaac.comm.gchat.chat-api :as sut]
+    [isaac.google.token :as token]
     [speclj.core :refer :all]))
 
 (describe "gchat chat-api outbound"
@@ -8,6 +10,22 @@
   (it "builds a media download URL without re-encoding the Chat resource"
     (should= "https://chat.googleapis.com/v1/media/spaces/IA+2/attachments/att/2=raw"
              (sut/-attachment-media-url "spaces/IA+2/attachments/att/2=raw")))
+
+  (it "keeps the raw HTTP response body when requested as bytes"
+    (let [payload (byte-array (map unchecked-byte [0x89 0x50]))]
+      (with-redefs [http/request (fn [opts]
+                              (should= :bytes (:as opts))
+                              {:status 200 :body payload})]
+        (should (identical? payload (:body (sut/-http! {:method "GET" :url "https://chat.googleapis.com/v1/media/a"
+                                                        :as :bytes})))))))
+
+  (it "downloads a PNG as untouched bytes"
+    (let [payload  (byte-array (map unchecked-byte [0x89 0x50 0x4e 0x47]))
+          captured (atom nil)]
+      (with-redefs [sut/-http! (fn [req] (reset! captured req) {:status 200 :body payload})
+                    token/token (constantly "at-1")]
+        (should (identical? payload (sut/download-attachment! "spaces/IA3/attachments/att-3")))
+        (should= :bytes (:as @captured)))))
 
   (it "POSTs a thread reply with messageReplyOption and bearer"
     (let [captured (atom nil)]

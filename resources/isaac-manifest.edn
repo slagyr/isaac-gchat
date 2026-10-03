@@ -1,5 +1,5 @@
 {:id          :isaac.comm.gchat
- :version     "0.2.19"
+ :version     "0.2.20"
  :builtin?    true
  :factory     isaac.comm.gchat.module/create-module
  :handbook    "isaac/gchat/handbook.md"

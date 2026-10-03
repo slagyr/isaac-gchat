@@ -12,9 +12,6 @@
   (let [name (last (str/split (str filename) #"[/\\\\]+"))]
     (if (or (str/blank? name) (= name ".") (= name "..")) "attachment" name)))
 
-(defn- content-bytes [content]
-  (.getBytes (str content) "UTF-8"))
-
 (defn- path [cwd message-id filename]
   (str cwd "/attachments/" message-id "/" filename))
 
@@ -34,12 +31,12 @@
                 resource     (get-in attachment [:attachmentDataRef :resourceName])]
             (try
               (let [content (chat-api/download-attachment! resource)
-                    size    (alength (content-bytes content))]
+                    size    (alength ^bytes content)]
                 (if (> size MAX-BYTES)
                   (failure-line filename "too large, not saved")
                   (let [target (path cwd message-id filename)]
                     (fs/mkdirs (fs/instance) (fs/parent target))
-                    (fs/spit (fs/instance) target content)
+                    (fs/write-bytes (fs/instance) target content)
                     (saved-line filename content-type size message-id))))
               (catch Exception e
                 (log/warn :gchat.attachment/download-failed :attachment resource :error (.getMessage e))

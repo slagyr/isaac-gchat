@@ -698,7 +698,6 @@ Feature: Google Chat inbound gate
   # starts 0x89, which is not valid UTF-8; the file on disk must be those
   # bytes, not U+FFFD replacement characters.
 
-  @wip
   Scenario: a PNG attachment is saved byte-identical and the turn is told (isaac-ut4u)
     Given the crew "main" allows tools: "fs/*"
     And config:

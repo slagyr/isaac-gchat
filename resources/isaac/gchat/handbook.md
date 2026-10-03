@@ -123,6 +123,8 @@ into the allowlist), or `:debug` for `:self`/`:policy`.
   as addressed to the account — if it's still starting turns, check
   whether that space's policy is `all` rather than `mentions`.
 
+- **An attachment landed but is not a valid image.** Older inbound media downloads decoded binary as UTF-8 text, replacing invalid bytes (for example PNG byte `89`) with `EF BF BD`. This is file corruption, not a missing download; ask the sender to resend after upgrading the gchat module.
+
 ## Spaces, sessions, and routing
 
 **What it is.** A space **is** a conversation: every space the account

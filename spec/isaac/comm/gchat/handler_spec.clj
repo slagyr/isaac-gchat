@@ -242,18 +242,29 @@
   (it "sanitizes a filename, saves the download, and frames it for the session"
     (let [fs* (fs/mem-fs)]
       (nexus/-with-nexus {:fs fs*}
-        (with-redefs [chat-api/download-attachment! (constantly "hello")]
+        (with-redefs [chat-api/download-attachment! (constantly (.getBytes "hello" "UTF-8"))]
           (should= ["[attachment: note.txt (text/plain, 5) at attachments/1/note.txt]"]
                    (inbound-attachment/save-all! "/work" "1"
                                                  [{:contentName "../note.txt" :contentType "text/plain"
                                                    :attachmentDataRef {:resourceName "a"}}]))
           (should= "hello" (fs/slurp fs* "/work/attachments/1/note.txt"))))))
 
+  (it "saves a PNG byte-identically"
+    (let [fs*     (fs/mem-fs)
+          payload (byte-array (map unchecked-byte [0x89 0x50 0x4e 0x47]))]
+      (nexus/-with-nexus {:fs fs*}
+        (with-redefs [chat-api/download-attachment! (constantly payload)]
+          (should= ["[attachment: badge.png (image/png, 4) at attachments/1/badge.png]"]
+                   (inbound-attachment/save-all! "/work" "1"
+                                                 [{:contentName "badge.png" :contentType "image/png"
+                                                   :attachmentDataRef {:resourceName "a"}}]))
+          (should= (seq payload) (seq (fs/read-bytes fs* "/work/attachments/1/badge.png" 0 4)))))))
+
   (it "does not save an attachment above the cap"
     (let [fs* (fs/mem-fs)]
       (nexus/-with-nexus {:fs fs*}
         (with-redefs [inbound-attachment/MAX-BYTES 4
-                      chat-api/download-attachment! (constantly "hello")]
+                      chat-api/download-attachment! (constantly (.getBytes "hello" "UTF-8"))]
           (should= ["[attachment: report.pdf (too large, not saved)]"]
                    (inbound-attachment/save-all! "/work" "1"
                                                  [{:contentName "report.pdf"

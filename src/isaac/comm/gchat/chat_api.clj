@@ -35,19 +35,21 @@
 
 (defn -http!
   "Internal HTTP seam. Returns {:status n :body parsed}. :body is sent as
-   JSON; :raw-body (bytes) is sent as-is, for media uploads."
-  [{:keys [method url headers query body raw-body] :as req}]
+   JSON; :raw-body (bytes) is sent as-is, for media uploads. :as :bytes
+   preserves the raw HTTP response body."
+  [{:keys [method url headers query body raw-body as] :as req}]
   (reset! last-request* req)
   (let [full-url (with-query url query)
         payload  (or raw-body (when body (json/generate-string body)))
         opts     (cond-> {:headers (or headers {}) :throw false}
-                   payload (assoc :body payload))
+                   payload (assoc :body payload)
+                   as (assoc :as as))
         response (case (keyword method)
                    :get  (http/get full-url opts)
                    :post (http/post full-url opts)
                    (http/request (assoc opts :method (keyword method) :uri full-url)))
         status   (:status response 0)
-        parsed   (parse-body (:body response))]
+        parsed   (if (= :bytes as) (:body response) (parse-body (:body response)))]
     {:status status :body parsed}))
 
 (defn get-message!
@@ -68,13 +70,14 @@
   (str chat-base "/media/" resource))
 
 (defn download-attachment!
-  "GET attachment media and return it as text from Chat's v1/media endpoint."
+  "GET attachment media and return its raw bytes from Chat's v1/media endpoint."
   [resource]
   (let [token ((requiring-resolve 'isaac.google.token/token))
         resp  (-http! {:method  "GET"
                        :url     (-attachment-media-url resource)
                        :headers {"Authorization" (str "Bearer " token)}
-                       :query   {:alt "media"}})]
+                       :query   {:alt "media"}
+                       :as      :bytes})]
     (if (<= 200 (:status resp) 299)
       (:body resp)
       (throw (ex-info (str "Chat API attachment download failed: " (:status resp))

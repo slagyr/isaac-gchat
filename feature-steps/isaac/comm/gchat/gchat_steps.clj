@@ -159,7 +159,8 @@
                       :url     (:url req)
                       :headers (:headers req)
                       :body    (:body req)
-                      :query   (:query req)}
+                      :query   (:query req)
+                      :as      (:as req)}
                (:query req) (assoc :query (:query req)))]
     (g/update! :outbound-http-requests (fn [prior] (vec (conj (or prior []) flat))))
     (g/assoc! :outbound-http-request flat)
@@ -307,7 +308,25 @@
     (g/update! :gchat-api-messages (fnil assoc {}) name msg)))
 
 (defn chat-api-serves-attachment [resource content]
-  (g/update! :gchat-attachments (fnil assoc {}) resource content))
+  (g/update! :gchat-attachments (fnil assoc {}) resource (.getBytes ^String content "UTF-8")))
+
+(defn- hex-bytes [hex]
+  (byte-array (map #(unchecked-byte (Integer/parseInt % 16)) (str/split hex #"\s+"))))
+
+(defn chat-api-serves-attachment-bytes [resource hex]
+  (g/update! :gchat-attachments (fnil assoc {}) resource (hex-bytes hex)))
+
+(defn outbound-http-used-as-bytes [url]
+  (g/should (some #(and (= url (:url %)) (= :bytes (:as %))) (g/get :outbound-http-requests))))
+
+(defn attachment-file-has-bytes [path hex]
+  (let [fs* (feature-fs)
+        cwd (some (fn [session]
+                    (let [candidate (str (:cwd session) "/" path)]
+                      (when (fs/exists? fs* candidate) (:cwd session))))
+                  (session-store/list-sessions (session-store/registered-store)))
+        target (str cwd "/" path)]
+    (g/should= (seq (hex-bytes hex)) (seq (fs/read-bytes fs* target 0 (fs/size fs* target))))))
 
 (defn attachment-file-contains [path content]
   (let [fs* (feature-fs)
@@ -486,6 +505,15 @@
 
 (defthen #"the file \"([^\"]+)\" under the session working directory contains \"([^\"]*)\""
   isaac.comm.gchat.gchat-steps/attachment-file-contains)
+
+(defgiven #"the Chat API serves attachment \"([^\"]+)\" with bytes \"([^\"]+)\""
+  isaac.comm.gchat.gchat-steps/chat-api-serves-attachment-bytes)
+
+(defthen #"the outbound HTTP request to \"([^\"]+)\" used as bytes"
+  isaac.comm.gchat.gchat-steps/outbound-http-used-as-bytes)
+
+(defthen #"the file \"([^\"]+)\" under the session working directory has bytes \"([^\"]+)\""
+  isaac.comm.gchat.gchat-steps/attachment-file-has-bytes)
 
 (defgiven "gchat outbound comm is registered"
   isaac.comm.gchat.gchat-steps/gchat-outbound-comm-registered)
