@@ -259,6 +259,11 @@
     (transcript/append! (:space decision) (transcript/entry decision))
     (doseq [session-key keys*]
       (let [session (ensure-session! decision session-key)]
+        (when-let [store (session-store/registered-store)]
+          (let [session* (session-store/get-session store session-key)]
+            (session-store/update-session! store session-key
+                                           {:channels (conj (or (:channels session*) #{})
+                                                            (str "gchat:" (:space decision)))})))
         (dispatch-to! decision session-key (or (:cwd session) (:cwd (api/get-session session-key)) (nexus/get :root)) input ch)))
     ;; Isaac answered here: the next mention's context starts after this line.
     (when (seq keys*)

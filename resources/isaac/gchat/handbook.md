@@ -245,6 +245,12 @@ in order. `send-attachments?` is on for this comm: a file path passed to
 `comm__send` is uploaded to Chat first, and the message references the
 upload.
 
+Inbound routing records `"gchat:spaces/…"` in the session's system-managed
+`:channels` set. A successful outbound `send!` returns `:channel` with the
+resolved space (including email targets resolved to DMs). When a queued
+send reaches that space, the agent delivery worker adds a marked assistant
+note to the owning session instead of relying on Chat's self echo.
+
 **How to change it.** These are call-time fields on `comm__send`, not
 persistent config — nothing to set with `handbook__configure` here beyond
 the comm entry's own fields above (`gchat/message-cap`, `gchat/account`).
