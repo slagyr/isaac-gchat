@@ -619,3 +619,46 @@ Feature: Google Chat outbound
       | method    | POST     |
       | body.text | Pick me. |
     And 0 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces:findDirectMessage" were made
+
+  @wip
+  Scenario: a delivery into a DM a person has talked in lands in that DM's session as a marked note
+    A DM's inbound message records the DM space on its session's :channels
+    ("gchat:spaces/DMM"). send! reports the space it posted to, so the
+    delivery worker can append the post to that session (agent:
+    features/comm/delivery/channel_continuity.feature).
+    Given config:
+      | google.tonotop.topic         | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"]          |
+    And the Chat API knows space "spaces/DMM":
+      | spaceType | DIRECT_MESSAGE |
+    And the Chat API returns message "spaces/DMM/messages/1":
+      | sender.email       | micah@tonotop.com     |
+      | sender.displayName | Micah Martin          |
+      | thread.name        | spaces/DMM/threads/T1 |
+      | text               | are you there?        |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Here.   |
+    When Google Chat delivers a message event for "spaces/DMM/messages/1"
+    Then session "gchat-tonotop-dm-micah-martin" has transcript matching:
+      | type    | message.role | message.content        |
+      | message | user         | #".*are you there\?.*" |
+      | message | assistant    | Here.                  |
+    Given the isaac EDN file "comm/delivery/pending/CR2.edn" exists with:
+      | path     | value               |
+      | id       | CR2                 |
+      | comm     | :gchat              |
+      | target   | spaces/DMM          |
+      | content  | Your weekly digest. |
+      | crew     | herald              |
+      | session  | cron-heartbeat      |
+      | attempts | 0                   |
+    When the delivery worker ticks
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DMM/messages" matches:
+      | method    | POST                |
+      | body.text | Your weekly digest. |
+    And session "gchat-tonotop-dm-micah-martin" has transcript matching:
+      | type    | message.role | message.content                                                                    |
+      | message | user         | #".*are you there\?.*"                                                             |
+      | message | assistant    | Here.                                                                              |
+      | message | assistant    | #"\[sent here by crew herald from session cron-heartbeat\] Your weekly digest\." |
