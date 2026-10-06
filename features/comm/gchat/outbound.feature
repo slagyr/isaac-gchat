@@ -662,3 +662,73 @@ Feature: Google Chat outbound
       | message | user         | #".*are you there\?.*"                                                             |
       | message | assistant    | Here.                                                                              |
       | message | assistant    | #"\[sent here by crew herald from session cron-heartbeat\] Your weekly digest\." |
+
+  @wip
+  Scenario: a delivery's note leads with the thread marker of the thread it started
+    Yopp, 2026-10-06: the note landed in the DM session with no thread, so it
+    could not be tied to the thread Micah answered in. send! reports
+    :marker, the [thread:…] marker an inbound line from that thread carries;
+    the worker leads the note with it. A post with no gchat/thread starts a
+    new thread, and Chat's create response names it (the fake answers a
+    create with the request's thread, or <space>/threads/posted).
+    Given config:
+      | google.tonotop.topic         | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"]          |
+    And the Chat API knows space "spaces/DMM":
+      | spaceType | DIRECT_MESSAGE |
+    And the Chat API returns message "spaces/DMM/messages/1":
+      | sender.email       | micah@tonotop.com     |
+      | sender.displayName | Micah Martin          |
+      | thread.name        | spaces/DMM/threads/T1 |
+      | text               | are you there?        |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Here.   |
+    When Google Chat delivers a message event for "spaces/DMM/messages/1"
+    Given the isaac EDN file "comm/delivery/pending/CR3.edn" exists with:
+      | path     | value               |
+      | id       | CR3                 |
+      | comm     | :gchat              |
+      | target   | spaces/DMM          |
+      | content  | Your weekly digest. |
+      | crew     | herald              |
+      | session  | cron-heartbeat      |
+      | attempts | 0                   |
+    When the delivery worker ticks
+    Then session "gchat-tonotop-dm-micah-martin" has transcript matching:
+      | type    | message.role | message.content                                                                                     |
+      | message | assistant    | #"\[thread:posted\] \[sent here by crew herald from session cron-heartbeat\] Your weekly digest\." |
+
+  @wip
+  Scenario: a delivery into an existing thread leads its note with that thread's marker
+    Given config:
+      | google.tonotop.topic         | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"]          |
+    And the Chat API knows space "spaces/DMM":
+      | spaceType | DIRECT_MESSAGE |
+    And the Chat API returns message "spaces/DMM/messages/1":
+      | sender.email       | micah@tonotop.com     |
+      | sender.displayName | Micah Martin          |
+      | thread.name        | spaces/DMM/threads/T1 |
+      | text               | are you there?        |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Here.   |
+    When Google Chat delivers a message event for "spaces/DMM/messages/1"
+    Given the isaac EDN file "comm/delivery/pending/CR4.edn" exists with:
+      | path         | value                 |
+      | id           | CR4                   |
+      | comm         | :gchat                |
+      | target       | spaces/DMM            |
+      | gchat/thread | spaces/DMM/threads/T1 |
+      | content      | Still on for 3pm.     |
+      | crew         | herald                |
+      | session      | cron-heartbeat        |
+      | attempts     | 0                     |
+    When the delivery worker ticks
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DMM/messages" matches:
+      | method           | POST                  |
+      | body.thread.name | spaces/DMM/threads/T1 |
+    And session "gchat-tonotop-dm-micah-martin" has transcript matching:
+      | type    | message.role | message.content                                                                               |
+      | message | assistant    | #"\[thread:T1\] \[sent here by crew herald from session cron-heartbeat\] Still on for 3pm\." |
