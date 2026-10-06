@@ -655,6 +655,7 @@ Feature: Google Chat outbound
       | attempts | 0                   |
     When the delivery worker ticks
     Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DMM/messages" matches:
+      | #index    | 1                   |
       | method    | POST                |
       | body.text | Your weekly digest. |
     And session "gchat-tonotop-dm-micah-martin" has transcript matching:
