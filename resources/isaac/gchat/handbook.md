@@ -249,7 +249,11 @@ Inbound routing records `"gchat:spaces/…"` in the session's system-managed
 `:comms` set. A successful outbound `send!` returns `:target` with the
 resolved space (including email targets resolved to DMs). When a queued
 send reaches that space, the agent delivery worker adds a marked assistant
-note to the owning session instead of relying on Chat's self echo.
+note to the owning session instead of relying on Chat's self echo. The send
+result also carries `:marker`, the same `[thread:…]` tag an inbound line
+carries: for a new thread it uses Chat's created message's thread; for an
+existing `gchat/thread` it identifies that thread. The delivery note leads
+with this marker so its reader can locate the post.
 
 **How to change it.** These are call-time fields on `comm__send`, not
 persistent config — nothing to set with `handbook__configure` here beyond

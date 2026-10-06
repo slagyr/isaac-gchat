@@ -232,7 +232,9 @@
       ;; that authenticated the send stands in for it, so each organization's
       ;; stubbed sends learn a distinct users/<id> (isaac-mm7o).
       {:status 200 :body {:name   (str (:url req') "/posted")
-                          :sender {:name (str "users/self-" (bearer-token req'))}}}
+                          :sender {:name (str "users/self-" (bearer-token req'))}
+                          :thread {:name (or (get-in req' [:body :thread :name])
+                                             (str (space-of-url url) "/threads/posted"))}}}
 
       ;; spaces.list: the account's own listing, the fallback a refused
       ;; spaces.get falls back to.

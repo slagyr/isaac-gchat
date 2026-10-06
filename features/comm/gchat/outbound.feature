@@ -663,7 +663,6 @@ Feature: Google Chat outbound
       | message | assistant    | Here.                                                                              |
       | message | assistant    | #"\[sent here by crew herald from session cron-heartbeat\] Your weekly digest\." |
 
-  @wip
   Scenario: a delivery's note leads with the thread marker of the thread it started
     Yopp, 2026-10-06: the note landed in the DM session with no thread, so it
     could not be tied to the thread Micah answered in. send! reports
@@ -699,7 +698,6 @@ Feature: Google Chat outbound
       | type    | message.role | message.content                                                                                     |
       | message | assistant    | #"\[thread:posted\] \[sent here by crew herald from session cron-heartbeat\] Your weekly digest\." |
 
-  @wip
   Scenario: a delivery into an existing thread leads its note with that thread's marker
     Given config:
       | google.tonotop.topic         | projects/marigold/topics/isaac |

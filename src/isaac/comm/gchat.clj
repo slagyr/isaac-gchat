@@ -7,8 +7,9 @@
     [isaac.agent.comm.factory :as factory]
     [isaac.comm.gchat.attachment :as attachment]
     [isaac.comm.gchat.chat-api :as chat-api]
-    [isaac.comm.gchat.self :as self]
+    [isaac.comm.gchat.canon :as canon]
     [isaac.comm.gchat.format :as fmt]
+    [isaac.comm.gchat.self :as self]
     [isaac.comm.gchat.target :as target]
     [isaac.comm.gchat.tenant :as tenant]
     [isaac.comm.gchat.transcript :as transcript]
@@ -47,7 +48,7 @@
   "Posts text as one message per chunk. Attachments ride the first chunk."
   [space thread text cap token tenant & [attachments]]
   (let [chunks (fmt/split-content (fmt/->chat-text text) cap)]
-    (doseq [[i chunk] (map-indexed vector chunks)]
+    (last (mapv (fn [[i chunk]]
       ;; The response's :sender is Isaac — the one free source of the account's
       ;; users/<id>, which the gate needs to see its own replies. Keyed by
       ;; tenant: a comm speaks for one organization (isaac-1zkz), and an id
@@ -58,7 +59,8 @@
                                            :thread thread
                                            :text   chunk
                                            :token  token}
-                                    (and (zero? i) (seq attachments)) (assoc :attachments attachments)))))))
+                                    (and (zero? i) (seq attachments)) (assoc :attachments attachments)))))
+                (map-indexed vector chunks)))))
 
 (defn- resolve-dm-space! [email token]
   (or (:name (chat-api/find-direct-message! email token))
@@ -87,9 +89,11 @@
             {:ok false :transient? false})
 
         :else
-        (let [refs (attachment/upload-all! space token (:attachments record))]
-          (post-chunks! space thread text cap token (tenant/of-comm cfg) refs)
-          {:ok true :target space}))) 
+        (let [refs   (attachment/upload-all! space token (:attachments record))
+              posted (post-chunks! space thread text cap token (tenant/of-comm cfg) refs)
+              marker (canon/thread-marker (or (get-in posted [:thread :name]) thread))]
+          (cond-> {:ok true :target space}
+            marker (assoc :marker marker)))))
     (catch Exception e
       (log/error :gchat.send/failed :error (.getMessage e))
       {:ok false :transient? true :error (.getMessage e)})))

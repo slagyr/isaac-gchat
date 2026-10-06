@@ -69,6 +69,20 @@
         (should= {:ok true :target "spaces/GT2"} (comm/send! c {:gchat/space "spaces/GT2" :target "spaces/GT9" :content "Pick me."}))
         (should= "spaces/GT2" (:space @captured)))))
 
+  (it "reports the created thread's marker on a new delivery"
+    (let [c (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [_] {:name "m1" :thread {:name "spaces/ENG/threads/posted"}})]
+        (should= {:ok true :target "spaces/ENG" :marker "[thread:posted]"}
+                 (comm/send! c {:target "spaces/ENG" :content "News."})))))
+
+  (it "reports the existing thread's marker on a delivery"
+    (let [c (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/create-message! (fn [_] {:name "m1" :thread {:name "spaces/ENG/threads/T1"}})]
+        (should= {:ok true :target "spaces/ENG" :marker "[thread:T1]"}
+                 (comm/send! c {:target "spaces/ENG" :gchat/thread "spaces/ENG/threads/T1" :content "News."})))))
+
   (it "posts to a resource name with an optional thread"
     (let [captured (atom nil)
           c        (comm-with slice)]
