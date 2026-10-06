@@ -578,7 +578,6 @@ Feature: Google Chat outbound
       | method    | POST                  |
       | body.text | gchat is unreachable. |
 
-  @wip
   Scenario: send! with a generic :target that is an email reaches that person's DM, creating it when absent
     Given the Chat API has no direct message space with "bob@tonotop.com"
     And the Chat API creates space "spaces/DMBOB" on setup
@@ -593,7 +592,6 @@ Feature: Google Chat outbound
       | method    | POST          |
       | body.text | Standup in 5. |
 
-  @wip
   Scenario: a queued delivery addressed to an email, as a cron job's to is, reaches the person instead of dead-lettering
     Given the Chat API has no direct message space with "bob@tonotop.com"
     And the Chat API creates space "spaces/DMBOB" on setup
@@ -611,7 +609,6 @@ Feature: Google Chat outbound
       | body.text | Your weekly digest. |
     And the directory "comm/delivery/pending" has exactly 0 files
 
-  @wip
   Scenario: gchat/space still wins over a generic :target that is an email
     When gchat comm send! is invoked with:
       | path        | value           |

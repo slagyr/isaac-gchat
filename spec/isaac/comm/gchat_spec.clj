@@ -43,6 +43,24 @@
         (should= "spaces/GT1" (:space @captured))
         (should= "Status, please." (:text @captured)))))
 
+  (it "creates a DM for a generic email target when no DM exists"
+    (let [calls (atom [])
+          c     (comm-with slice)]
+      (with-redefs [sut/access-token (constantly "at-1")
+                    chat-api/find-direct-message! (fn [email token]
+                                                    (swap! calls conj [:find email token])
+                                                    nil)
+                    chat-api/setup-direct-message! (fn [email token]
+                                                     (swap! calls conj [:setup email token])
+                                                     {:name "spaces/DMBOB"})
+                    chat-api/create-message! (fn [opts]
+                                               (swap! calls conj [:create opts])
+                                               {:name "m1"})]
+        (should= {:ok true} (comm/send! c {:target "bob@tonotop.com" :content "Standup in 5."}))
+        (should= [:find "bob@tonotop.com" "at-1"] (first @calls))
+        (should= [:setup "bob@tonotop.com" "at-1"] (second @calls))
+        (should= "spaces/DMBOB" (get-in (nth @calls 2) [1 :space])))))
+
   (it "prefers a gchat space to the generic target"
     (let [captured (atom nil)
           c        (comm-with slice)]

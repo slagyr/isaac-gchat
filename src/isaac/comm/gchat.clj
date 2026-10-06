@@ -71,9 +71,15 @@
           cap    (or (:gchat/message-cap cfg) fmt/default-message-cap)
           text   (:content record)
           to     (:gchat/to record)
-          space  (or (when (seq to)
-                       (resolve-dm-space! to token))
-                     (target/resolve-space cfg (or (:gchat/space record) (:target record))))
+          named  (:gchat/space record)
+          generic (:target record)
+          space  (cond
+                   (seq to) (resolve-dm-space! to token)
+                   (seq named) (target/resolve-space cfg named)
+                   (and (string? generic) (str/includes? generic "@")
+                        (not (str/starts-with? generic "spaces/")))
+                   (resolve-dm-space! generic token)
+                   :else (target/resolve-space cfg generic))
           thread (:gchat/thread record)]
       (cond
         (str/blank? space)
