@@ -231,6 +231,21 @@ this comm accepts fields for:
 | `gchat/to` | string | A person's email — resolves (or creates) a direct-message space with them. |
 | `gchat/thread` | string | Optional thread resource (`spaces/…/threads/…`) to reply into. |
 
+**Generic `target` (cron `to`, attention notices).** A queued delivery
+that carries only the generic `target` key, not a `gchat/*` field, is
+resolved as a *space*: a configured space's `name`, or a raw resource name
+(`spaces/…`). This is the path a cron job's `to` takes (cron enqueues it as
+`target`) and the path `attention.notify.target` takes. Precedence is
+`gchat/to`, then `gchat/space`, then `target`.
+
+An email is **not** resolved here. `target "chris@example.com"` matches no
+space, logs `:gchat.send/missing-target`, and dead-letters without retry.
+To reach one person from a cron job or attention notice, use their
+existing DM space's resource name (`spaces/…`) as `to`/`target`. The DM
+has to exist already: only `gchat/to` finds or creates one, and that field
+is set by `comm__send`, not by cron. `gchat__spaces` lists the DMs this
+account is in; `gchat__history` on one shows who is on the other side.
+
 A reply longer than `gchat/message-cap` characters (4096 default, Chat's
 own limit) is split at newline boundaries into several messages, posted
 in order. `send-attachments?` is on for this comm: a file path passed to
@@ -252,6 +267,11 @@ of an unaccepted DM invite).
   email is a real Chat user Google can resolve to a direct-message space —
   a DM that doesn't exist yet is created automatically, but an unresolvable
   address fails the send outright.
+- **A cron job (or attention notice) addressed to an email never
+  arrives.** The generic `target` only resolves spaces, so an email
+  dead-letters with `:gchat.send/missing-target` in the `server` log. Set
+  `to` to the person's DM space (`spaces/…`) instead; see Generic `target`
+  above.
 - **A long reply arrives as several separate messages.** That's
   `gchat/message-cap` splitting, not a bug — raise the cap (up to Chat's
   own 4096 ceiling) if the split itself is the problem.
