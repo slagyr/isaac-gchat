@@ -233,9 +233,10 @@ this comm accepts fields for:
 
 **Generic `target` (cron `to`, attention notices).** A queued delivery
 that carries only the generic `target` key, not a `gchat/*` field, is
-resolved as a *space*: a configured space's `name`, or a raw resource name
-(`spaces/…`). This is the path a cron job's `to` takes (cron enqueues it as
-`target`) and the path `attention.notify.target` takes. Precedence is
+resolved as a *space*: a configured space's id (its key under `spaces`)
+or `name`, or a raw resource name (`spaces/…`). This is the path a cron
+job's `to` takes (cron enqueues it as `target`) and the path
+`attention.notify.target` takes. Precedence is
 `gchat/to`, then `gchat/space`, then `target`.
 
 An email is **not** resolved here. `target "chris@example.com"` matches no
