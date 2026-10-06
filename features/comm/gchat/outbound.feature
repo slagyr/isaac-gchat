@@ -577,3 +577,48 @@ Feature: Google Chat outbound
     Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/GT3/messages" matches:
       | method    | POST                  |
       | body.text | gchat is unreachable. |
+
+  @wip
+  Scenario: send! with a generic :target that is an email reaches that person's DM, creating it when absent
+    Given the Chat API has no direct message space with "bob@tonotop.com"
+    And the Chat API creates space "spaces/DMBOB" on setup
+    When gchat comm send! is invoked with:
+      | path    | value           |
+      | target  | bob@tonotop.com |
+      | content | Standup in 5.   |
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces:findDirectMessage" matches:
+      | method     | GET                   |
+      | query.name | users/bob@tonotop.com |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DMBOB/messages" matches:
+      | method    | POST          |
+      | body.text | Standup in 5. |
+
+  @wip
+  Scenario: a queued delivery addressed to an email, as a cron job's to is, reaches the person instead of dead-lettering
+    Given the Chat API has no direct message space with "bob@tonotop.com"
+    And the Chat API creates space "spaces/DMBOB" on setup
+    And the isaac EDN file "comm/delivery/pending/CR1.edn" exists with:
+      | path     | value               |
+      | id       | CR1                 |
+      | comm     | :gchat              |
+      | target   | bob@tonotop.com     |
+      | to       | bob@tonotop.com     |
+      | content  | Your weekly digest. |
+      | attempts | 0                   |
+    When the delivery worker ticks
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DMBOB/messages" matches:
+      | method    | POST                |
+      | body.text | Your weekly digest. |
+    And the directory "comm/delivery/pending" has exactly 0 files
+
+  @wip
+  Scenario: gchat/space still wins over a generic :target that is an email
+    When gchat comm send! is invoked with:
+      | path        | value           |
+      | gchat/space | spaces/GT2      |
+      | target      | bob@tonotop.com |
+      | content     | Pick me.        |
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/GT2/messages" matches:
+      | method    | POST     |
+      | body.text | Pick me. |
+    And 0 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces:findDirectMessage" were made
