@@ -620,11 +620,12 @@ Feature: Google Chat outbound
       | body.text | Pick me. |
     And 0 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces:findDirectMessage" were made
 
+  @wip
   Scenario: a delivery into a DM a person has talked in lands in that DM's session as a marked note
-    A DM's inbound message records the DM space on its session's :channels
-    ("gchat:spaces/DMM"). send! reports the space it posted to, so the
-    delivery worker can append the post to that session (agent:
-    features/comm/delivery/channel_continuity.feature).
+    A DM's inbound message records the DM space on its session's :comms
+    ("gchat:spaces/DMM"). send! reports the :target space it posted to, so
+    the delivery worker can append the post to that session (agent:
+    features/comm/delivery/comm_continuity.feature).
     Given config:
       | google.tonotop.topic         | projects/marigold/topics/isaac |
       | comms.gchat.gchat/allow-from | ["micah@tonotop.com"]          |
