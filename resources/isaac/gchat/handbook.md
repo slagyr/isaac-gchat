@@ -246,7 +246,7 @@ in order. `send-attachments?` is on for this comm: a file path passed to
 upload.
 
 Inbound routing records `"gchat:spaces/…"` in the session's system-managed
-`:channels` set. A successful outbound `send!` returns `:channel` with the
+`:comms` set. A successful outbound `send!` returns `:target` with the
 resolved space (including email targets resolved to DMs). When a queued
 send reaches that space, the agent delivery worker adds a marked assistant
 note to the owning session instead of relying on Chat's self echo.

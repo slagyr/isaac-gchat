@@ -29,7 +29,7 @@
           c        (comm-with slice)]
       (with-redefs [sut/access-token (constantly "at-1")
                     chat-api/create-message! (fn [opts] (reset! captured opts) {:name "m1"})]
-        (should= {:ok true :channel "spaces/ENG"} (comm/send! c {:gchat/space "engineering" :content "Red alert!"}))
+        (should= {:ok true :target "spaces/ENG"} (comm/send! c {:gchat/space "engineering" :content "Red alert!"}))
         (should= "spaces/ENG" (:space @captured))
         (should= "Red alert!" (:text @captured))
         (should= "at-1" (:token @captured)))))
@@ -39,7 +39,7 @@
           c        (comm-with slice)]
       (with-redefs [sut/access-token (constantly "at-1")
                     chat-api/create-message! (fn [opts] (reset! captured opts) {:name "m1"})]
-        (should= {:ok true :channel "spaces/GT1"} (comm/send! c {:target "spaces/GT1" :content "Status, please."}))
+        (should= {:ok true :target "spaces/GT1"} (comm/send! c {:target "spaces/GT1" :content "Status, please."}))
         (should= "spaces/GT1" (:space @captured))
         (should= "Status, please." (:text @captured)))))
 
@@ -56,7 +56,7 @@
                     chat-api/create-message! (fn [opts]
                                                (swap! calls conj [:create opts])
                                                {:name "m1"})]
-        (should= {:ok true :channel "spaces/DMBOB"} (comm/send! c {:target "bob@tonotop.com" :content "Standup in 5."}))
+        (should= {:ok true :target "spaces/DMBOB"} (comm/send! c {:target "bob@tonotop.com" :content "Standup in 5."}))
         (should= [:find "bob@tonotop.com" "at-1"] (first @calls))
         (should= [:setup "bob@tonotop.com" "at-1"] (second @calls))
         (should= "spaces/DMBOB" (get-in (nth @calls 2) [1 :space])))))
@@ -66,7 +66,7 @@
           c        (comm-with slice)]
       (with-redefs [sut/access-token (constantly "at-1")
                     chat-api/create-message! (fn [opts] (reset! captured opts) {:name "m1"})]
-        (should= {:ok true :channel "spaces/GT2"} (comm/send! c {:gchat/space "spaces/GT2" :target "spaces/GT9" :content "Pick me."}))
+        (should= {:ok true :target "spaces/GT2"} (comm/send! c {:gchat/space "spaces/GT2" :target "spaces/GT9" :content "Pick me."}))
         (should= "spaces/GT2" (:space @captured)))))
 
   (it "posts to a resource name with an optional thread"
@@ -94,7 +94,7 @@
                     chat-api/create-message! (fn [opts]
                                                (swap! calls conj [:create opts])
                                                {:name "m1"})]
-        (should= {:ok true :channel "spaces/DMBOB"} (comm/send! c {:gchat/to "bob@tonotop.com" :content "Standup in 5."}))
+        (should= {:ok true :target "spaces/DMBOB"} (comm/send! c {:gchat/to "bob@tonotop.com" :content "Standup in 5."}))
         (should= [:find "bob@tonotop.com" "at-1"] (first @calls))
         (should= [:setup "bob@tonotop.com" "at-1"] (second @calls))
         (should= "spaces/DMBOB" (get-in (nth @calls 2) [1 :space]))
@@ -116,7 +116,7 @@
                       chat-api/create-message! (fn [opts]
                                                  (swap! calls conj [:create opts])
                                                  {:name "m1"})]
-          (should= {:ok true :channel "spaces/ENG"} (comm/send! c {:gchat/space  "spaces/ENG"
+          (should= {:ok true :target "spaces/ENG"} (comm/send! c {:gchat/space  "spaces/ENG"
                                              :content      "Here is the report."
                                              :attachments  ["/work/report.pdf" "/work/notes.txt"]}))
           (should= [:upload :upload :create] (mapv first @calls))

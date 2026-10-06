@@ -68,8 +68,7 @@
 (defn- ensure-session! [decision session-key]
   (or (api/get-session session-key)
       (api/create-session! session-key
-                           (cond-> {:channel  "gchat"
-                                    :chatType (if (:dm? decision) "direct" "space")
+                           (cond-> {:chatType (if (:dm? decision) "direct" "space")
                                     :crew     (:crew decision)
                                     :origin   (origin decision)}
                              ;; Only the space's own canonical session carries
@@ -262,7 +261,7 @@
         (when-let [store (session-store/registered-store)]
           (let [session* (session-store/get-session store session-key)]
             (session-store/update-session! store session-key
-                                           {:channels (conj (or (:channels session*) #{})
+                                           {:comms (conj (or (:comms session*) #{})
                                                             (str "gchat:" (:space decision)))})))
         (dispatch-to! decision session-key (or (:cwd session) (:cwd (api/get-session session-key)) (nexus/get :root)) input ch)))
     ;; Isaac answered here: the next mention's context starts after this line.

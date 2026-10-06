@@ -620,7 +620,6 @@ Feature: Google Chat outbound
       | body.text | Pick me. |
     And 0 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces:findDirectMessage" were made
 
-  @wip
   Scenario: a delivery into a DM a person has talked in lands in that DM's session as a marked note
     A DM's inbound message records the DM space on its session's :comms
     ("gchat:spaces/DMM"). send! reports the :target space it posted to, so

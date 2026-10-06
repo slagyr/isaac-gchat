@@ -89,7 +89,7 @@
         :else
         (let [refs (attachment/upload-all! space token (:attachments record))]
           (post-chunks! space thread text cap token (tenant/of-comm cfg) refs)
-          {:ok true :channel space}))) 
+          {:ok true :target space}))) 
     (catch Exception e
       (log/error :gchat.send/failed :error (.getMessage e))
       {:ok false :transient? true :error (.getMessage e)})))
