@@ -620,6 +620,22 @@ Feature: Google Chat inbound gate
     When Google Chat delivers a message event for "spaces/ENG/messages/1"
     Then the last LLM request carries the gchat thread guidance exactly once
 
+  @wip
+  Scenario: the guidance tells the crew where its own replies went and what a delivery note is
+    Yopp, 2026-10-07: its own replies carry no thread marker, so it could
+    not tell a question in another thread had been answered. A reply always
+    posts into the thread of the message it answers, so the guidance says
+    so, rather than marking the crew's own words (which it would copy into
+    what it posts). It also says what a delivery note is (isaac-mve9/fm94).
+    Given the following model responses are queued:
+      | model | type | content |
+      | echo  | text | On it.  |
+    When Google Chat delivers a message event for "spaces/ENG/messages/1"
+    Then the last LLM request matches:
+      | key      | value                                                                                                   |
+      | messages | #"(?s)Your own earlier replies carry no thread marker: each one went into the thread of the message it answered" |
+      | messages | #"(?s)\[sent here by crew … from session …\] is something another crew or job posted into that thread"      |
+
   Scenario: an entry's explicit session overrides the canonical name (isaac-ihuc)
     Given config:
       | google.tonotop.topic                                | projects/marigold/topics/isaac |
