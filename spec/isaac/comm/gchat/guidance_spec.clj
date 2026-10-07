@@ -16,8 +16,8 @@
     (should (re-find #"(?i)never include a trace" sut/TEXT)))
 
   (it "draws the response/send line with comm__send, verbatim (isaac-baf1)"
-    (should-contain (str "Your response is the text you end this turn with. It is delivered back over "
-                         "the channel this message came from, so never send it with comm__send. That "
+    (should-contain (str "Your response is the text you end this turn with. It is posted back into "
+                         "the thread this message came from, so never send it with comm__send. That "
                          "tool is for additional messages of your own during the turn: several "
                          "messages in a row, a message to another thread, space or person, or "
                          "something you were asked to send. Those never replace your response, so "

@@ -620,7 +620,6 @@ Feature: Google Chat inbound gate
     When Google Chat delivers a message event for "spaces/ENG/messages/1"
     Then the last LLM request carries the gchat thread guidance exactly once
 
-  @wip
   Scenario: the guidance tells the crew where its own replies went and what a delivery note is
     Yopp, 2026-10-07: its own replies carry no thread marker, so it could
     not tell a question in another thread had been answered. A reply always
