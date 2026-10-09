@@ -29,7 +29,8 @@
     [isaac.agent.session.session-steps :as session-steps]
     [isaac.agent.session.store.memory :as memory-store]
     [isaac.agent.session.store.spi :as session-store]
-    [isaac.agent.turn.worker :as turn-worker]))
+    [isaac.agent.turn.worker :as turn-worker]
+    [isaac.agent.turn.queue :as turn-queue]))
 
 (helper! isaac.comm.gchat.gchat-steps)
 
@@ -432,6 +433,15 @@
       (let [actual (or (get origin (keyword field)) (get origin field))]
         (g/should= value (str actual))))))
 
+(defn latest-turn-from-matches [key table]
+  (let [turn (->> (binding [turn-queue/*root* (root-dir)] (turn-queue/all-turns))
+                  (filter #(= (:id (api/get-session key)) (:session %)))
+                  last)
+        from (:from turn)]
+    (g/should turn)
+    (doseq [[field value] (table-map table)]
+      (g/should= value (str (get from (keyword field)))))))
+
 (defn- with-chat-stubs [f]
   (with-redefs [chat-api/get-message! stub-get-message!
                 chat-api/-http!       stub-http!
@@ -549,6 +559,9 @@
 
 (defthen #"session \"([^\"]+)\" has origin:"
   isaac.comm.gchat.gchat-steps/session-origin-matches)
+
+(defthen #"the latest turn on session \"([^\"]+)\" has from:"
+  isaac.comm.gchat.gchat-steps/latest-turn-from-matches)
 
 (defthen "the last LLM request carries the gchat thread guidance exactly once"
   isaac.comm.gchat.gchat-steps/last-llm-request-carries-guidance-once)

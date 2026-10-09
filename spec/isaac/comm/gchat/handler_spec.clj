@@ -42,6 +42,23 @@
           (should= "gchat-spaces-eng" (:session-key @dispatched))
           (should (some #(= :gchat/message-routed (:event %)) @log/captured-logs))))))
 
+  (it "names a sender without a directory name or email by Google user id alone"
+    (let [dispatched (atom nil)
+          message    (-> mention-msg
+                         (assoc :sender {:name "users/118"})
+                         (assoc :text "@Isaac can you look?"))
+          slice      (assoc-in cfg [:comms :gchat :gchat/allow-from] ["users/118"])]
+      (with-redefs [sut/-load-cfg         (fn [] (get-in slice [:comms :gchat]))
+                    lookup/space-info     (fn [_ _ _] {})
+                    chat-api/get-message! (fn [_] message)
+                    api/get-session       (fn [_] nil)
+                    api/create-session!   (fn [id _] {:name id})
+                    api/dispatch!         (fn [req] (reset! dispatched req))]
+        (log/capture-logs
+          (sut/handle-event {:data {:message {:name "spaces/ENG/messages/1"}}})
+          (should= {:kind :handle :comm :gchat :id "users/118" :authenticated true}
+                   (:from @dispatched))))))
+
   (it "uses the Chat thread as the dispatch coalesce key"
     (let [dispatched (atom nil)]
       (with-redefs [sut/-load-cfg         (fn [] (get-in cfg [:comms :gchat]))

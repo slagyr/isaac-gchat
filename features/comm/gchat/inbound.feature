@@ -267,7 +267,6 @@ Feature: Google Chat inbound gate
       | display-name | Hieronymus Finch                |
       | email        | hieronymus@marigold.example           |
 
-  @wip
   Scenario: the turn records who spoke as a verified handle (isaac-dlw5)
     A handle is how one comm names the party on the other end. Chat names
     a sender by users/<id>; Google has verified who that is, so the handle

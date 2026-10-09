@@ -88,6 +88,14 @@ passes through a deterministic gate, in order:
    and appended to that space's transcript, just not turned into a turn —
    the next mention picks that context back up.
 
+For every routed turn, `:from` is a verified Chat sender handle:
+`{:kind :handle :comm :gchat :id "users/<id>" :authenticated true}`.
+The `:id` is Google's global user id, not a tenant-specific or comm-slot id;
+`:comm` is the comm type `:gchat`. When known, `:name` carries the display
+name and `:email` carries the resolved address; absent values are omitted.
+A Chat sender is always authenticated because Google vouches for the sender.
+The rendered message and session `:origin` retain their existing format.
+
 A mention is detected by a Chat `@`-annotation naming the account's own
 `users/<id>` (or, before that id is known, by asking Google who the
 mentioned id is) — a message that `@`-mentions someone else is not a

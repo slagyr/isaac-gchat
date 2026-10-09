@@ -239,11 +239,18 @@
     (when (and (seq cwd) (seq (:attachment decision)))
       (inbound-attachment/save-all! cwd message-id (:attachment decision)))))
 
+(defn- sender-handle [decision]
+  (let [{:keys [user display-name email]} (:identity decision)]
+    (cond-> {:kind :handle :comm :gchat :id user :authenticated true}
+      (seq display-name) (assoc :name display-name)
+      (seq email)        (assoc :email email))))
+
 (defn- dispatch-to! [decision session-key cwd input ch]
   (api/dispatch! (cond-> {:session-key session-key
                           :input       (let [lines (attachment-lines cwd decision)]
                                          (if (seq lines) (str input "\n" (str/join "\n" lines)) input))
                           :origin      (origin decision)
+                          :from        (sender-handle decision)
                           :coalesce-key (:thread decision)
                           :crew        (:crew decision)
                           :config      (full-config)
