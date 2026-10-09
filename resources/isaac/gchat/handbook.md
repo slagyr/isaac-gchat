@@ -37,7 +37,7 @@ long as `type` is set). Its fields:
 `isaac config set`):
 
 ```
-config set comms.gchat.gchat/account yopp@example.com
+config set comms.gchat.gchat/account isaac@example.com
 config set comms.gchat.gchat/allow-from '["*@example.com"]'
 config set comms.gchat.gchat/message-cap 2000
 ```

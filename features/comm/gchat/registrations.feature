@@ -14,9 +14,9 @@ Feature: Google Chat registrations and renewal
     Given default Grover setup in "/test/gchat-registrations"
     And config:
       | log.output                                | memory                         |
-      | google.tonotop.topic                      | projects/marigold/topics/isaac |
-      | google.tonotop.renew-within-hours         | 24                             |
-      | comms.gchat.gchat/account                 | yopp@tonotop.com               |
+      | google.marigold.topic                      | projects/marigold/topics/isaac |
+      | google.marigold.renew-within-hours         | 24                             |
+      | comms.gchat.gchat/account                 | isaac@marigold.example               |
       | comms.gchat.gchat/spaces.spaces/ENG.name  | engineering                    |
       | comms.gchat.gchat/spaces.spaces/PROD.name | product                        |
     And the google auth store has access "at-1" and refresh "rt-1"

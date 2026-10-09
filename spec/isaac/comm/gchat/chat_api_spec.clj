@@ -51,22 +51,22 @@
                     (fn [req]
                       (reset! captured req)
                       {:status 200 :body {:name "spaces/DMBOB"}})]
-        (should= "spaces/DMBOB" (:name (sut/find-direct-message! "bob@tonotop.com" "at-1")))
+        (should= "spaces/DMBOB" (:name (sut/find-direct-message! "bob@marigold.example" "at-1")))
         (should= "GET" (:method @captured))
         (should= "https://chat.googleapis.com/v1/spaces:findDirectMessage" (:url @captured))
-        (should= "users/bob@tonotop.com" (get-in @captured [:query :name])))))
+        (should= "users/bob@marigold.example" (get-in @captured [:query :name])))))
 
   (it "returns nil when findDirectMessage is 404"
     (with-redefs [sut/-http! (fn [_] {:status 404 :body {}})]
-      (should-be-nil (sut/find-direct-message! "bob@tonotop.com" "at-1"))))
+      (should-be-nil (sut/find-direct-message! "bob@marigold.example" "at-1"))))
 
   (it "asks Chat what one space is"
     (let [captured (atom nil)]
       (with-redefs [sut/-http!
                     (fn [req]
                       (reset! captured req)
-                      {:status 200 :body {:name "spaces/AAQA7rg5Uyc" :displayName "Yopp Test"}})]
-        (should= "Yopp Test" (:displayName (sut/get-space! "at-1" "spaces/AAQA7rg5Uyc")))
+                      {:status 200 :body {:name "spaces/AAQA7rg5Uyc" :displayName "Isaac Test"}})]
+        (should= "Isaac Test" (:displayName (sut/get-space! "at-1" "spaces/AAQA7rg5Uyc")))
         (should= "GET" (:method @captured))
         (should= "https://chat.googleapis.com/v1/spaces/AAQA7rg5Uyc" (:url @captured))
         (should= "Bearer at-1" (get-in @captured [:headers "Authorization"])))))
@@ -81,11 +81,11 @@
                     (fn [req]
                       (reset! captured req)
                       {:status 200 :body {:name "spaces/DMBOB"}})]
-        (should= "spaces/DMBOB" (:name (sut/setup-direct-message! "bob@tonotop.com" "at-1")))
+        (should= "spaces/DMBOB" (:name (sut/setup-direct-message! "bob@marigold.example" "at-1")))
         (should= "POST" (:method @captured))
         (should= "https://chat.googleapis.com/v1/spaces:setup" (:url @captured))
         (should= "DIRECT_MESSAGE" (get-in @captured [:body :space :spaceType]))
-        (should= "users/bob@tonotop.com"
+        (should= "users/bob@marigold.example"
                  (get-in @captured [:body :memberships 0 :member :name])))))
 
   (it "POSTs an emoji reaction on the triggering message"

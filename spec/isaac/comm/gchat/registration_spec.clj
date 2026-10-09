@@ -7,14 +7,14 @@
     [speclj.core :refer :all]))
 
 (def one-organization
-  {:google {:tonotop {:topic "projects/marigold/topics/isaac"}}
+  {:google {:marigold {:topic "projects/marigold/topics/isaac"}}
    :comms  {:gchat {:gchat/spaces {:spaces/ENG  {:name "engineering"}
                                    :spaces/PROD {:name "product"}}}}})
 
 (def tenanted
-  {:google {:tonotop {:project "marigold"  :topic "projects/marigold/topics/isaac"}
+  {:google {:marigold {:project "marigold"  :topic "projects/marigold/topics/isaac"}
             :acme    {:project "acme-prod" :topic "projects/acme-prod/topics/isaac"}}
-   :comms  {:gchat      {:google       :tonotop
+   :comms  {:gchat      {:google       :marigold
                          :gchat/spaces {:spaces/ENG {:name "engineering"}}}
             :gchat-acme {:type         :gchat
                          :google       :acme
@@ -37,7 +37,7 @@
   (it "configured spaces subscribe nothing of their own"
     (with-redefs [loader/snapshot (fn [_] tenanted)]
       (should= ["spaces/-"] (binding [tenants/*tenant* :acme] (sut/subscription-keys)))
-      (should= ["spaces/-"] (binding [tenants/*tenant* :tonotop] (sut/subscription-keys)))))
+      (should= ["spaces/-"] (binding [tenants/*tenant* :marigold] (sut/subscription-keys)))))
 
   (it "create body targets all spaces, pointer-only, against the shared topic"
     (let [body (created one-organization nil "spaces/-")]
@@ -58,7 +58,7 @@
     (should= "projects/acme-prod/topics/isaac"
              (get-in (created tenanted :acme "spaces/-") [:notificationEndpoint :pubsubTopic]))
     (should= "projects/marigold/topics/isaac"
-             (get-in (created tenanted :tonotop "spaces/-") [:notificationEndpoint :pubsubTopic])))
+             (get-in (created tenanted :marigold "spaces/-") [:notificationEndpoint :pubsubTopic])))
 
   (it "expiry reads expireTime from Google"
     (should= "2026-09-25T12:00:00Z" (sut/expiry {:expireTime "2026-09-25T12:00:00Z"})))

@@ -35,7 +35,7 @@
 
 (defn- listed
   "The account's own listing, when `spaces.get` will not answer: Chat refuses
-   spaces.get on a direct message it will happily list (403, yopp 2026-09-23,
+   spaces.get on a direct message it will happily list (403, isaac 2026-09-23,
    isaac-f4ab). One paged `spaces.list`, the entry whose name matches, or nil."
   [token space]
   (loop [page-token nil]

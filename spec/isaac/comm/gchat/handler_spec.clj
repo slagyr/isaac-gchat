@@ -12,18 +12,18 @@
     [speclj.core :refer :all]))
 
 (def cfg
-  {:comms {:gchat {:gchat/account    "yopp@tonotop.com"
-                   :gchat/account-id "users/yopp"
-                   :gchat/allow-from ["ada@tonotop.com"]
+  {:comms {:gchat {:gchat/account    "isaac@marigold.example"
+                   :gchat/account-id "users/isaac"
+                   :gchat/allow-from ["ada@marigold.example"]
                    :gchat/spaces     {:spaces/ENG {:name "Engineering" :crew "main"}}}}})
 
 (def mention-msg
   {:name         "spaces/ENG/messages/1"
-   :sender       {:email "ada@tonotop.com"}
+   :sender       {:email "ada@marigold.example"}
    :thread       {:name "spaces/ENG/threads/T1"}
    :text         "@Isaac can you look at the deploy?"
    :space        {:type "SPACE" :name "spaces/ENG"}
-   :annotations  {:mention "users/yopp"}})
+   :annotations  {:mention "users/isaac"}})
 
 (describe "gchat handler"
 
@@ -64,7 +64,7 @@
                     api/dispatch!         (fn [req] (reset! dispatched req))]
         (log/capture-logs
           (sut/handle-event {:data {:message {:name "spaces/ENG/messages/1"}}})
-          (should= "[thread:T1] ada@tonotop.com: @Isaac can you look at the deploy?"
+          (should= "[thread:T1] ada@marigold.example: @Isaac can you look at the deploy?"
                    (:input @dispatched))
           (should= guidance/TEXT (:guidance @dispatched))))))
 
@@ -80,72 +80,72 @@
 
   (it "a space nobody listed opens its canonical session, tagged with the space id"
     (let [created (atom nil)
-          slice   {:gchat/account    "yopp@tonotop.com"
-                   :gchat/account-id "users/yopp"
-                   :gchat/allow-from ["ada@tonotop.com"]}]
+          slice   {:gchat/account    "isaac@marigold.example"
+                   :gchat/account-id "users/isaac"
+                   :gchat/allow-from ["ada@marigold.example"]}]
       (with-redefs [sut/-load-cfg         (fn [] slice)
                     chat-api/get-message! (fn [_] (-> mention-msg
                                                       (assoc :name "spaces/AAQA7rg5Uyc/messages/1")
                                                       (assoc :space {:type "SPACE" :name "spaces/AAQA7rg5Uyc"})))
-                    lookup/space-info     (fn [_ _ _] {:displayName "Yopp Test"})
+                    lookup/space-info     (fn [_ _ _] {:displayName "Isaac Test"})
                     api/get-session       (fn [_] nil)
                     api/create-session!   (fn [id opts] (reset! created [id opts]) {:name id})
                     api/dispatch!         (fn [_])]
         (log/capture-logs
           (sut/handle-event {:data {:message {:name "spaces/AAQA7rg5Uyc/messages/1"}}})
-          (should= "gchat-yopp-test" (first @created))
+          (should= "gchat-isaac-test" (first @created))
           (should= #{:space:AAQA7rg5Uyc} (:tags (second @created)))))))
 
   (it "a renamed space renames the session its tag already names"
     (let [dispatched (atom nil)
           renamed    (atom nil)
-          slice      {:gchat/account    "yopp@tonotop.com"
-                      :gchat/account-id "users/yopp"
-                      :gchat/allow-from ["ada@tonotop.com"]}]
+          slice      {:gchat/account    "isaac@marigold.example"
+                      :gchat/account-id "users/isaac"
+                      :gchat/allow-from ["ada@marigold.example"]}]
       (with-redefs [sut/-load-cfg         (fn [] slice)
                     chat-api/get-message! (fn [_] (-> mention-msg
                                                       (assoc :name "spaces/AAQA7rg5Uyc/messages/2")
                                                       (assoc :space {:type "SPACE" :name "spaces/AAQA7rg5Uyc"})))
-                    lookup/space-info     (fn [_ _ _] {:displayName "Yopp Lab"})
-                    sut/-sessions         (fn [] [{:id   "gchat-yopp-test"
-                                                   :name "gchat-yopp-test"
+                    lookup/space-info     (fn [_ _ _] {:displayName "Isaac Lab"})
+                    sut/-sessions         (fn [] [{:id   "gchat-isaac-test"
+                                                   :name "gchat-isaac-test"
                                                    :tags #{:space:AAQA7rg5Uyc}}])
                     sut/-rename-session!  (fn [from to] (reset! renamed [from to]))
-                    api/get-session       (fn [_] {:name "gchat-yopp-lab"})
+                    api/get-session       (fn [_] {:name "gchat-isaac-lab"})
                     api/dispatch!         (fn [req] (reset! dispatched req))]
         (log/capture-logs
           (sut/handle-event {:data {:message {:name "spaces/AAQA7rg5Uyc/messages/2"}}})
-          (should= ["gchat-yopp-test" "gchat-yopp-lab"] @renamed)
-          (should= "gchat-yopp-lab" (:session-key @dispatched))))))
+          (should= ["gchat-isaac-test" "gchat-isaac-lab"] @renamed)
+          (should= "gchat-isaac-lab" (:session-key @dispatched))))))
 
   (it "a rename the store refuses leaves the session where it is"
     (let [dispatched (atom nil)
-          slice      {:gchat/account    "yopp@tonotop.com"
-                      :gchat/account-id "users/yopp"
-                      :gchat/allow-from ["ada@tonotop.com"]}]
+          slice      {:gchat/account    "isaac@marigold.example"
+                      :gchat/account-id "users/isaac"
+                      :gchat/allow-from ["ada@marigold.example"]}]
       (with-redefs [sut/-load-cfg         (fn [] slice)
                     chat-api/get-message! (fn [_] (-> mention-msg
                                                       (assoc :name "spaces/AAQA7rg5Uyc/messages/2")
                                                       (assoc :space {:type "SPACE" :name "spaces/AAQA7rg5Uyc"})))
-                    lookup/space-info     (fn [_ _ _] {:displayName "Yopp Lab"})
-                    sut/-sessions         (fn [] [{:id   "gchat-yopp-test"
-                                                   :name "gchat-yopp-test"
+                    lookup/space-info     (fn [_ _ _] {:displayName "Isaac Lab"})
+                    sut/-sessions         (fn [] [{:id   "gchat-isaac-test"
+                                                   :name "gchat-isaac-test"
                                                    :tags #{:space:AAQA7rg5Uyc}}])
                     sut/-rename-session!  (fn [_ _] (throw (ex-info "a turn is in progress" {})))
-                    api/get-session       (fn [_] {:name "gchat-yopp-test"})
+                    api/get-session       (fn [_] {:name "gchat-isaac-test"})
                     api/dispatch!         (fn [req] (reset! dispatched req))]
         (log/capture-logs
           (sut/handle-event {:data {:message {:name "spaces/AAQA7rg5Uyc/messages/2"}}})
-          (should= "gchat-yopp-test" (:session-key @dispatched))
+          (should= "gchat-isaac-test" (:session-key @dispatched))
           (should (some #(= :gchat/session-rename-failed (:event %)) @log/captured-logs))))))
 
   (it "dispatches on the operator's defaults.crew when the space and the comm name none (isaac-rfmh)"
     (let [dispatched (atom nil)
-          host       {:comms    {:gchat {:gchat/account    "yopp@tonotop.com"
-                                         :gchat/account-id "users/yopp"
-                                         :gchat/allow-from ["ada@tonotop.com"]}}
-                      :defaults {:frequencies {:crew :yopp}}
-                      :google   {:tonotop {:topic "projects/marigold/topics/isaac"}}}]
+          host       {:comms    {:gchat {:gchat/account    "isaac@marigold.example"
+                                         :gchat/account-id "users/isaac"
+                                         :gchat/allow-from ["ada@marigold.example"]}}
+                      :defaults {:frequencies {:crew :isaac}}
+                      :google   {:marigold {:topic "projects/marigold/topics/isaac"}}}]
       (with-redefs [sut/-load-cfg         (fn [] (get-in host [:comms :gchat]))
                     sut/full-config       (fn [] host)
                     chat-api/get-message! (fn [_] mention-msg)
@@ -155,26 +155,26 @@
                     api/dispatch!         (fn [req] (reset! dispatched req))]
         (log/capture-logs
           (sut/handle-event {:data {:message {:name "spaces/ENG/messages/1"}}})
-          (should= "yopp" (:crew @dispatched))))))
+          (should= "isaac" (:crew @dispatched))))))
 
   (it "the session name says which organization's space it is, on a host with one"
     (let [created (atom nil)
-          one-org {:comms  {:gchat {:gchat/account    "yopp@tonotop.com"
-                                    :gchat/account-id "users/yopp"
-                                    :gchat/allow-from ["ada@tonotop.com"]}}
-                   :google {:tonotop {:topic "projects/marigold/topics/isaac"}}}]
+          one-org {:comms  {:gchat {:gchat/account    "isaac@marigold.example"
+                                    :gchat/account-id "users/isaac"
+                                    :gchat/allow-from ["ada@marigold.example"]}}
+                   :google {:marigold {:topic "projects/marigold/topics/isaac"}}}]
       (with-redefs [sut/-load-cfg         (fn [] (get-in one-org [:comms :gchat]))
                     sut/full-config       (fn [] one-org)
                     chat-api/get-message! (fn [_] (-> mention-msg
                                                       (assoc :name "spaces/AAQA7rg5Uyc/messages/1")
                                                       (assoc :space {:type "SPACE" :name "spaces/AAQA7rg5Uyc"})))
-                    lookup/space-info     (fn [_ _ _] {:displayName "Yopp Test"})
+                    lookup/space-info     (fn [_ _ _] {:displayName "Isaac Test"})
                     api/get-session       (fn [_] nil)
                     api/create-session!   (fn [id opts] (reset! created [id opts]) {:name id})
                     api/dispatch!         (fn [_])]
         (log/capture-logs
           (sut/handle-event {:data {:message {:name "spaces/AAQA7rg5Uyc/messages/1"}}})
-          (should= "gchat-tonotop-yopp-test" (first @created))))))
+          (should= "gchat-marigold-isaac-test" (first @created))))))
 
   (it "a membership event is noted and nothing else"
     (let [dispatched (atom false)]

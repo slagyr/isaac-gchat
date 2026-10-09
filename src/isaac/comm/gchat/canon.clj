@@ -77,7 +77,7 @@
 (defn rendered-line
   "The line a Chat message becomes wherever it enters a transcript: a leading
    thread marker, then \"Sender: text\" — the same shape whether the message
-   triggered a turn, was merely heard, or is Yopp's own reply, so every line
+   triggered a turn, was merely heard, or is Isaac's own reply, so every line
    says which thread it belongs to (isaac-acou)."
   [{:keys [thread sender text]}]
   (str (when-let [marker (thread-marker thread)] (str marker " "))

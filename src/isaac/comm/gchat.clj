@@ -25,7 +25,7 @@
 (defonce ^:private origin-by-session (atom {}))
 (defonce ^:private delivery-failures* (atom {}))
 
-;; Reactions on the triggering message show Yopp's progress — 👀 working, ✅
+;; Reactions on the triggering message show Isaac's progress — 👀 working, ✅
 ;; answered, ⚠️ failed, ⏳ parked — instead of a status post (isaac-1bq1).
 ;; Chat lets a user add/remove reactions and neither notifies. Keyed by
 ;; session-key: {:message <resource name> :reaction <resource name> :emoji
@@ -290,7 +290,7 @@
           failure)))))
 
 (defn- note-own-reply!
-  "Yopp's own reply gets the same thread marker every other line in the
+  "Isaac's own reply gets the same thread marker every other line in the
    space's transcript carries (isaac-acou) — only once it actually posted;
    a diverted or failed reply never reached the thread."
   [comm origin text]

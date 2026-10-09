@@ -14,17 +14,17 @@ Feature: Google Chat inbound gate
     Given default Grover setup in "/test/gchat-inbound"
     And config:
       | log.output                               | memory              |
-      | comms.gchat.gchat/account                | yopp@tonotop.com    |
-      | comms.gchat.gchat/account-id             | users/yopp          |
-      | comms.gchat.gchat/allow-from             | ["ada@tonotop.com"] |
+      | comms.gchat.gchat/account                | isaac@marigold.example    |
+      | comms.gchat.gchat/account-id             | users/isaac          |
+      | comms.gchat.gchat/allow-from             | ["ada@marigold.example"] |
       | comms.gchat.gchat/spaces.spaces/ENG.name | Engineering         |
       | comms.gchat.gchat/spaces.spaces/ENG.crew | main                |
       | sessions.naming-strategy                 | sequential          |
     And the Chat API returns message "spaces/ENG/messages/1":
-      | sender.email        | ada@tonotop.com                    |
+      | sender.email        | ada@marigold.example                    |
       | thread.name         | spaces/ENG/threads/T1              |
       | text                | @Isaac can you look at the deploy? |
-      | annotations.mention | users/yopp                         |
+      | annotations.mention | users/isaac                         |
 
   Scenario: a mention in a configured space starts a turn on the space's session
     Given the following model responses are queued:
@@ -33,7 +33,7 @@ Feature: Google Chat inbound gate
     When Google Chat delivers a message event for "spaces/ENG/messages/1"
     Then session "gchat-spaces-ENG" has transcript matching:
       | type    | message.role | message.content                            |
-      | message | user         | #".*ada@tonotop.com.*look at the deploy.*" |
+      | message | user         | #".*ada@marigold.example.*look at the deploy.*" |
       | message | assistant    | On it.                                     |
     And the log has entries matching:
       | level | event                 | space      | thread                |
@@ -41,7 +41,7 @@ Feature: Google Chat inbound gate
 
   Scenario: a message that does not mention the account is heard, not answered
     Given the Chat API returns message "spaces/ENG/messages/2":
-      | sender.email | ada@tonotop.com       |
+      | sender.email | ada@marigold.example       |
       | thread.name  | spaces/ENG/threads/T1 |
       | text         | lunch anyone?         |
     When Google Chat delivers a message event for "spaces/ENG/messages/2"
@@ -55,7 +55,7 @@ Feature: Google Chat inbound gate
     A mention means the account. A message that @-mentions a colleague is
     not addressed to Isaac, even though it carries a user mention.
     Given the Chat API returns message "spaces/ENG/messages/3":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/ENG/threads/T1 |
       | text                | @Chris can you look?  |
       | annotations.mention | users/chris           |
@@ -68,7 +68,7 @@ Feature: Google Chat inbound gate
 
   Scenario: a DM starts a turn without a mention
     Given the Chat API returns message "spaces/DM1/messages/1":
-      | sender.email | ada@tonotop.com        |
+      | sender.email | ada@marigold.example        |
       | space.type   | DIRECT_MESSAGE         |
       | thread.name  | spaces/DM1/threads/T1  |
       | text         | are you there?         |
@@ -83,10 +83,10 @@ Feature: Google Chat inbound gate
 
   Scenario: Isaac's own message is dropped
     Given the Chat API returns message "spaces/ENG/messages/3":
-      | sender.email        | yopp@tonotop.com      |
+      | sender.email        | isaac@marigold.example      |
       | thread.name         | spaces/ENG/threads/T1 |
       | text                | On it.                |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     When Google Chat delivers a message event for "spaces/ENG/messages/3"
     Then the session count is 0
     And grover records zero provider requests
@@ -100,7 +100,7 @@ Feature: Google Chat inbound gate
       | sender.domainId     | 0xother               |
       | thread.name         | spaces/ENG/threads/T1 |
       | text                | @Isaac hi             |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     When Google Chat delivers a message event for "spaces/ENG/messages/4"
     Then the session count is 0
     And grover records zero provider requests
@@ -110,14 +110,14 @@ Feature: Google Chat inbound gate
 
   Scenario: a human sender is admitted by users/<id> or domain:<id> — Chat does not return emails for people
     Given config:
-      | comms.gchat.gchat/allow-from | ["users/118285940969606191299"] |
+      | comms.gchat.gchat/allow-from | ["users/100000000000000000001"] |
     And the Chat API returns message "spaces/ENG/messages/5":
-      | sender.name         | users/118285940969606191299 |
-      | sender.displayName  | Micah Martin                |
-      | sender.domainId     | 0ivzlyj                     |
+      | sender.name         | users/100000000000000000001 |
+      | sender.displayName  | Hieronymus Finch                |
+      | sender.domainId     | 0marigold                     |
       | thread.name         | spaces/ENG/threads/T5       |
       | text                | @Isaac hi                   |
-      | annotations.mention | users/yopp                  |
+      | annotations.mention | users/isaac                  |
     When Google Chat delivers a message event for "spaces/ENG/messages/5"
     Then the session count is 1
     And the log has entries matching:
@@ -126,15 +126,15 @@ Feature: Google Chat inbound gate
 
   Scenario: an email allow-list admits a Chat sender whose id resolves to that email
     Given config:
-      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"] |
-    And the Google People API knows "users/118" as "Micah Martin" with email "micah@tonotop.com"
+      | comms.gchat.gchat/allow-from | ["hieronymus@marigold.example"] |
+    And the Google People API knows "users/118" as "Hieronymus Finch" with email "hieronymus@marigold.example"
     And the Chat API returns message "spaces/ENG/messages/6":
       | sender.name         | users/118             |
-      | sender.displayName  | Micah Martin          |
-      | sender.domainId     | 0ivzlyj               |
+      | sender.displayName  | Hieronymus Finch          |
+      | sender.domainId     | 0marigold               |
       | thread.name         | spaces/ENG/threads/T6 |
       | text                | @Isaac hi             |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     When Google Chat delivers a message event for "spaces/ENG/messages/6"
     Then the session count is 1
     And the log has entries matching:
@@ -143,22 +143,22 @@ Feature: Google Chat inbound gate
 
   Scenario: the turn input names who spoke
     Given config:
-      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"] |
-    And the Google People API knows "users/118" as "Micah Martin" with email "micah@tonotop.com"
+      | comms.gchat.gchat/allow-from | ["hieronymus@marigold.example"] |
+    And the Google People API knows "users/118" as "Hieronymus Finch" with email "hieronymus@marigold.example"
     And the Chat API returns message "spaces/ENG/messages/7":
       | sender.name         | users/118                |
-      | sender.displayName  | Micah Martin             |
-      | sender.domainId     | 0ivzlyj                  |
+      | sender.displayName  | Hieronymus Finch             |
+      | sender.domainId     | 0marigold                  |
       | thread.name         | spaces/ENG/threads/T7    |
       | text                | @Isaac can you look?     |
-      | annotations.mention | users/yopp               |
+      | annotations.mention | users/isaac               |
     And the following model responses are queued:
       | model | type | content |
       | echo  | text | On it.  |
     When Google Chat delivers a message event for "spaces/ENG/messages/7"
     Then session "gchat-spaces-ENG" has transcript matching:
       | type    | message.role | message.content                                     |
-      | message | user         | #"Micah Martin <micah@tonotop\.com>: @Isaac can you look\?" |
+      | message | user         | #"Hieronymus Finch <hieronymus@marigold\.example>: @Isaac can you look\?" |
       | message | assistant    | On it.                                              |
 
   Scenario: without the directory scope the allow-list falls back to users/<id> and warns once
@@ -167,18 +167,18 @@ Feature: Google Chat inbound gate
     And the Google People API refuses with 403 "Request had insufficient authentication scopes."
     And the Chat API returns message "spaces/ENG/messages/8":
       | sender.name         | users/118             |
-      | sender.displayName  | Micah Martin          |
-      | sender.domainId     | 0ivzlyj               |
+      | sender.displayName  | Hieronymus Finch          |
+      | sender.domainId     | 0marigold               |
       | thread.name         | spaces/ENG/threads/T8 |
       | text                | @Isaac hi             |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     And the Chat API returns message "spaces/ENG/messages/8b":
       | sender.name         | users/119             |
       | sender.displayName  | Ada Lovelace          |
-      | sender.domainId     | 0ivzlyj               |
+      | sender.domainId     | 0marigold               |
       | thread.name         | spaces/ENG/threads/T8 |
       | text                | @Isaac hi again       |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     When Google Chat delivers a message event for "spaces/ENG/messages/8"
     And Google Chat delivers a message event for "spaces/ENG/messages/8b"
     Then the session count is 1
@@ -190,15 +190,15 @@ Feature: Google Chat inbound gate
 
   Scenario: a failed lookup does not block a sender the id list already admits
     Given config:
-      | comms.gchat.gchat/allow-from | ["domain:0ivzlyj"] |
+      | comms.gchat.gchat/allow-from | ["domain:0marigold"] |
     And the Google People API refuses with 500 "backend error"
     And the Chat API returns message "spaces/ENG/messages/9":
       | sender.name         | users/999             |
       | sender.displayName  | Ada Lovelace          |
-      | sender.domainId     | 0ivzlyj               |
+      | sender.domainId     | 0marigold               |
       | thread.name         | spaces/ENG/threads/T9 |
       | text                | @Isaac hi             |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     When Google Chat delivers a message event for "spaces/ENG/messages/9"
     Then the session count is 1
     And the log has entries matching:
@@ -209,7 +209,7 @@ Feature: Google Chat inbound gate
     Given config:
       | comms.gchat.gchat/spaces.spaces/ENG.respond | all |
     And the Chat API returns message "spaces/ENG/messages/2":
-      | sender.email | ada@tonotop.com       |
+      | sender.email | ada@marigold.example       |
       | thread.name  | spaces/ENG/threads/T1 |
       | text         | lunch anyone?         |
     And the following model responses are queued:
@@ -223,17 +223,17 @@ Feature: Google Chat inbound gate
 
   Scenario: a *@domain allow-list entry admits the whole domain and nobody else (isaac-dymn)
     Given config:
-      | comms.gchat.gchat/allow-from | ["*@tonotop.com"] |
+      | comms.gchat.gchat/allow-from | ["*@marigold.example"] |
     And the Chat API returns message "spaces/ENG/messages/20":
-      | sender.email        | grace@tonotop.com      |
+      | sender.email        | grace@marigold.example      |
       | thread.name         | spaces/ENG/threads/T20 |
       | text                | @Isaac ship it         |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the Chat API returns message "spaces/ENG/messages/21":
       | sender.email        | mallory@example.com    |
       | thread.name         | spaces/ENG/threads/T21 |
       | text                | @Isaac ship it         |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type | content   |
       | echo  | text | Shipping. |
@@ -247,40 +247,40 @@ Feature: Google Chat inbound gate
 
   Scenario: the session remembers who spoke, by an id a rename cannot orphan (isaac-bklu)
     Given config:
-      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"] |
-    And the Google People API knows "users/118285940969606191299" as "Micah Martin" with email "micah@tonotop.com"
+      | comms.gchat.gchat/allow-from | ["hieronymus@marigold.example"] |
+    And the Google People API knows "users/100000000000000000001" as "Hieronymus Finch" with email "hieronymus@marigold.example"
     And the Chat API returns message "spaces/ENG/messages/22":
-      | sender.name         | users/118285940969606191299 |
-      | sender.displayName  | Micah Martin                |
-      | sender.domainId     | 0ivzlyj                     |
+      | sender.name         | users/100000000000000000001 |
+      | sender.displayName  | Hieronymus Finch                |
+      | sender.domainId     | 0marigold                     |
       | thread.name         | spaces/ENG/threads/T22      |
       | text                | @Isaac who am I?            |
-      | annotations.mention | users/yopp                  |
+      | annotations.mention | users/isaac                  |
     And the following model responses are queued:
       | model | type | content   |
-      | echo  | text | You, Micah. |
+      | echo  | text | You, Hieronymus. |
     When Google Chat delivers a message event for "spaces/ENG/messages/22"
     Then session "gchat-spaces-ENG" has origin:
       | kind         | :gchat                      |
       | space        | spaces/ENG                  |
-      | user         | users/118285940969606191299 |
-      | display-name | Micah Martin                |
-      | email        | micah@tonotop.com           |
+      | user         | users/100000000000000000001 |
+      | display-name | Hieronymus Finch                |
+      | email        | hieronymus@marigold.example           |
 
   Scenario: a mention carries what the space said while Isaac was quiet, framed as context (isaac-iv5c)
     Given the Chat API returns message "spaces/ENG/messages/30":
-      | sender.email | ada@tonotop.com        |
+      | sender.email | ada@marigold.example        |
       | thread.name  | spaces/ENG/threads/T30 |
       | text         | the deploy is stuck    |
     And the Chat API returns message "spaces/ENG/messages/31":
-      | sender.email | ada@tonotop.com          |
+      | sender.email | ada@marigold.example          |
       | thread.name  | spaces/ENG/threads/T30   |
       | text         | send everyone a postcard |
     And the Chat API returns message "spaces/ENG/messages/32":
-      | sender.email        | ada@tonotop.com        |
+      | sender.email        | ada@marigold.example        |
       | thread.name         | spaces/ENG/threads/T30 |
       | text                | @Isaac what happened?  |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type | content        |
       | echo  | text | The deploy is. |
@@ -332,14 +332,14 @@ Feature: Google Chat inbound gate
     domain allow-list they would have been let through, and Isaac would have
     answered itself.
     Given config:
-      | comms.gchat.gchat/account-id | users/101936183306307394083            |
-      | comms.gchat.gchat/allow-from | ["domain:tonotop.com", "ada@tonotop.com"] |
+      | comms.gchat.gchat/account-id | users/100000000000000000002            |
+      | comms.gchat.gchat/allow-from | ["domain:marigold.example", "ada@marigold.example"] |
     And the Chat API returns message "spaces/ENG/messages/9":
-      | sender.name         | users/101936183306307394083 |
-      | sender.domainId     | tonotop.com                 |
+      | sender.name         | users/100000000000000000002 |
+      | sender.domainId     | marigold.example                 |
       | thread.name         | spaces/ENG/threads/T1       |
       | text                | On it.                      |
-      | annotations.mention | users/yopp                  |
+      | annotations.mention | users/isaac                  |
     When Google Chat delivers a message event for "spaces/ENG/messages/9"
     Then the session count is 0
     And grover records zero provider requests
@@ -353,19 +353,19 @@ Feature: Google Chat inbound gate
     organization - an id learned for one organization must never drop a
     message as self for another.
     Given config:
-      | comms.gchat.gchat/google       | tonotop                |
+      | comms.gchat.gchat/google       | marigold                |
       | comms.gchat.gchat/account-id   | #delete                |
-      | comms.gchat.gchat/allow-from   | ["domain:tonotop.com"] |
+      | comms.gchat.gchat/allow-from   | ["domain:marigold.example"] |
       | comms.gchat-acme.type          | gchat                  |
       | comms.gchat-acme.gchat/google  | acme                   |
       | comms.gchat-acme.gchat/account | isaac@acme.example     |
-    And the google auth store for organization "tonotop" has access "at-tonotop" and refresh "rt-tonotop"
+    And the google auth store for organization "marigold" has access "at-marigold" and refresh "rt-marigold"
     And the google auth store for organization "acme" has access "at-acme" and refresh "rt-acme"
     And gchat comm "gchat" is registered
     When gchat comm send! is invoked with:
       | path        | value       |
       | gchat/space | spaces/ENG  |
-      | content     | Tonotop ack |
+      | content     | Marigold ack |
     Given gchat comm "gchat-acme" is registered
     When gchat comm send! is invoked with:
       | path        | value       |
@@ -373,10 +373,10 @@ Feature: Google Chat inbound gate
       | content     | Acme ack    |
     And the Chat API returns message "spaces/ENG/messages/10":
       | sender.name         | users/self-at-acme    |
-      | sender.domainId     | tonotop.com            |
+      | sender.domainId     | marigold.example            |
       | thread.name         | spaces/ENG/threads/T2  |
       | text                | look at this           |
-      | annotations.mention | users/self-at-tonotop  |
+      | annotations.mention | users/self-at-marigold  |
     When Google Chat delivers a message event for "spaces/ENG/messages/10"
     Then the session count is 1
     And the log has entries matching:
@@ -386,10 +386,10 @@ Feature: Google Chat inbound gate
       | comms.gchat.gchat/google | acme |
     And the Chat API returns message "spaces/ENG/messages/11":
       | sender.name         | users/self-at-acme   |
-      | sender.domainId     | tonotop.com          |
+      | sender.domainId     | marigold.example          |
       | thread.name         | spaces/ENG/threads/T2 |
       | text                | echo                 |
-      | annotations.mention | users/yopp           |
+      | annotations.mention | users/isaac           |
     When Google Chat delivers a message event for "spaces/ENG/messages/11"
     Then the session count is 1
     And the log has entries matching:
@@ -400,53 +400,53 @@ Feature: Google Chat inbound gate
     Membership is the grant: the one spaces/- subscription carries a space
     nothing in config mentions, and Chat is asked once what it is called.
     Given config:
-      | google.tonotop.topic | projects/marigold/topics/isaac |
+      | google.marigold.topic | projects/marigold/topics/isaac |
     And the Chat API knows space "spaces/AAQA7rg5Uyc":
-      | displayName | Yopp Test |
+      | displayName | Isaac Test |
       | spaceType   | SPACE     |
     And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/1":
-      | sender.email        | ada@tonotop.com               |
+      | sender.email        | ada@marigold.example               |
       | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
       | text                | @Isaac are you there?         |
-      | annotations.mention | users/yopp                    |
+      | annotations.mention | users/isaac                    |
     And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/2":
-      | sender.email        | ada@tonotop.com               |
+      | sender.email        | ada@marigold.example               |
       | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
       | text                | @Isaac still there?           |
-      | annotations.mention | users/yopp                    |
+      | annotations.mention | users/isaac                    |
     And the following model responses are queued:
       | model | type | content |
       | echo  | text | Here.   |
       | echo  | text | Still.  |
     When Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/1"
     And Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/2"
-    Then session "gchat-tonotop-yopp-test" has transcript matching:
+    Then session "gchat-marigold-isaac-test" has transcript matching:
       | type    | message.role | message.content        |
       | message | user         | #".*are you there\?.*" |
       | message | assistant    | Here.                  |
       | message | user         | #".*still there\?.*"   |
       | message | assistant    | Still.                 |
-    And session "gchat-tonotop-yopp-test" is tagged "space:AAQA7rg5Uyc"
+    And session "gchat-marigold-isaac-test" is tagged "space:AAQA7rg5Uyc"
     And 1 outbound HTTP request to "https://chat.googleapis.com/v1/spaces/AAQA7rg5Uyc" was made
 
   Scenario: an event carrying a new display name renames the session, which keeps its history (isaac-ihuc)
     The tag is what holds the session together; the name follows Chat.
     Given config:
-      | google.tonotop.topic | projects/marigold/topics/isaac |
+      | google.marigold.topic | projects/marigold/topics/isaac |
     And the Chat API knows space "spaces/AAQA7rg5Uyc":
-      | displayName | Yopp Test |
+      | displayName | Isaac Test |
       | spaceType   | SPACE     |
     And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/1":
-      | sender.email        | ada@tonotop.com               |
+      | sender.email        | ada@marigold.example               |
       | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
       | text                | @Isaac are you there?         |
-      | annotations.mention | users/yopp                    |
+      | annotations.mention | users/isaac                    |
     And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/2":
-      | sender.email        | ada@tonotop.com               |
-      | space.displayName   | Yopp Lab                      |
+      | sender.email        | ada@marigold.example               |
+      | space.displayName   | Isaac Lab                      |
       | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
       | text                | @Isaac still there?           |
-      | annotations.mention | users/yopp                    |
+      | annotations.mention | users/isaac                    |
     And the following model responses are queued:
       | model | type | content |
       | echo  | text | Here.   |
@@ -454,57 +454,57 @@ Feature: Google Chat inbound gate
     When Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/1"
     And Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/2"
     Then the session count is 1
-    And session "gchat-tonotop-yopp-lab" has transcript matching:
+    And session "gchat-marigold-isaac-lab" has transcript matching:
       | type    | message.role | message.content        |
       | message | user         | #".*are you there\?.*" |
       | message | assistant    | Here.                  |
       | message | user         | #".*still there\?.*"   |
       | message | assistant    | Still.                 |
-    And session "gchat-tonotop-yopp-lab" is tagged "space:AAQA7rg5Uyc"
+    And session "gchat-marigold-isaac-lab" is tagged "space:AAQA7rg5Uyc"
     And the log has entries matching:
       | level | event                   | from                    | to                     |
-      | :info | :gchat/session-renamed  | gchat-tonotop-yopp-test | gchat-tonotop-yopp-lab |
+      | :info | :gchat/session-renamed  | gchat-marigold-isaac-test | gchat-marigold-isaac-lab |
 
   Scenario: a DM's first message starts a session named for the other member (isaac-ihuc)
     Given config:
-      | google.tonotop.topic         | projects/marigold/topics/isaac |
-      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"]          |
+      | google.marigold.topic         | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/allow-from | ["hieronymus@marigold.example"]          |
     And the Chat API knows space "spaces/DMM":
       | spaceType | DIRECT_MESSAGE |
     And the Chat API returns message "spaces/DMM/messages/1":
-      | sender.email       | micah@tonotop.com     |
-      | sender.displayName | Micah Martin          |
+      | sender.email       | hieronymus@marigold.example     |
+      | sender.displayName | Hieronymus Finch          |
       | thread.name        | spaces/DMM/threads/T1 |
       | text               | are you there?        |
     And the following model responses are queued:
       | model | type | content |
       | echo  | text | Here.   |
     When Google Chat delivers a message event for "spaces/DMM/messages/1"
-    Then session "gchat-tonotop-dm-micah-martin" has transcript matching:
+    Then session "gchat-marigold-dm-hieronymus-finch" has transcript matching:
       | type    | message.role | message.content        |
       | message | user         | #".*are you there\?.*" |
       | message | assistant    | Here.                  |
-    And session "gchat-tonotop-dm-micah-martin" is tagged "space:DMM"
+    And session "gchat-marigold-dm-hieronymus-finch" is tagged "space:DMM"
 
   Scenario: two spaces sharing a display name get two sessions (isaac-xy2i)
     Given config:
-      | google.tonotop.topic | projects/marigold/topics/isaac |
+      | google.marigold.topic | projects/marigold/topics/isaac |
     And the Chat API knows space "spaces/AAQA7rg5Uyc":
-      | displayName | Yopp Test |
+      | displayName | Isaac Test |
       | spaceType   | SPACE     |
     And the Chat API knows space "spaces/BBBB2222":
-      | displayName | Yopp Test |
+      | displayName | Isaac Test |
       | spaceType   | SPACE     |
     And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/1":
-      | sender.email        | ada@tonotop.com               |
+      | sender.email        | ada@marigold.example               |
       | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
       | text                | @Isaac which room is this?    |
-      | annotations.mention | users/yopp                    |
+      | annotations.mention | users/isaac                    |
     And the Chat API returns message "spaces/BBBB2222/messages/1":
-      | sender.email        | ada@tonotop.com            |
+      | sender.email        | ada@marigold.example            |
       | thread.name         | spaces/BBBB2222/threads/T1 |
       | text                | @Isaac which room is this? |
-      | annotations.mention | users/yopp                 |
+      | annotations.mention | users/isaac                 |
     And the following model responses are queued:
       | model | type | content    |
       | echo  | text | The first. |
@@ -512,8 +512,8 @@ Feature: Google Chat inbound gate
     When Google Chat delivers a message event for "spaces/AAQA7rg5Uyc/messages/1"
     And Google Chat delivers a message event for "spaces/BBBB2222/messages/1"
     Then the session count is 2
-    And session "gchat-tonotop-yopp-test" is tagged "space:AAQA7rg5Uyc"
-    And session "gchat-tonotop-yopp-test-bbbb2222" is tagged "space:BBBB2222"
+    And session "gchat-marigold-isaac-test" is tagged "space:AAQA7rg5Uyc"
+    And session "gchat-marigold-isaac-test-bbbb2222" is tagged "space:BBBB2222"
 
   Scenario: a DM the account is only invited to warns once, does not post, and diverts the reply (isaac-qry7)
     Chat 403s spaces.get and messages.create alike on a DM the account was
@@ -521,14 +521,14 @@ Feature: Google Chat inbound gate
     The turn still runs; the reply goes to the attention comm instead, named
     for the DM and the sender.
     Given config:
-      | comms.gchat.gchat/allow-from | ["cordelia@tonotop.com"] |
+      | comms.gchat.gchat/allow-from | ["cordelia@marigold.example"] |
       | attention.notify.comm        | logbook                  |
       | attention.notify.target      | ops-room                 |
     And the Chat API knows space "spaces/INV1":
       | spaceType | DIRECT_MESSAGE |
     And the Chat API refuses spaces.get for "spaces/INV1" with 403
     And the Chat API returns message "spaces/INV1/messages/1":
-      | sender.email       | cordelia@tonotop.com   |
+      | sender.email       | cordelia@marigold.example   |
       | sender.displayName | Cordelia               |
       | thread.name        | spaces/INV1/threads/T1 |
       | text                | are you there?         |
@@ -550,17 +550,17 @@ Feature: Google Chat inbound gate
 
   Scenario: a second message in the same invited DM does not warn again (isaac-qry7)
     Given config:
-      | comms.gchat.gchat/allow-from | ["cordelia@tonotop.com"] |
+      | comms.gchat.gchat/allow-from | ["cordelia@marigold.example"] |
     And the Chat API knows space "spaces/INV1":
       | spaceType | DIRECT_MESSAGE |
     And the Chat API refuses spaces.get for "spaces/INV1" with 403
     And the Chat API returns message "spaces/INV1/messages/1":
-      | sender.email       | cordelia@tonotop.com   |
+      | sender.email       | cordelia@marigold.example   |
       | sender.displayName | Cordelia               |
       | thread.name        | spaces/INV1/threads/T1 |
       | text                | are you there?         |
     And the Chat API returns message "spaces/INV1/messages/2":
-      | sender.email       | cordelia@tonotop.com   |
+      | sender.email       | cordelia@marigold.example   |
       | sender.displayName | Cordelia               |
       | thread.name        | spaces/INV1/threads/T1 |
       | text                | still there?           |
@@ -575,28 +575,28 @@ Feature: Google Chat inbound gate
   Scenario: a mention in one thread keeps two threads' history straight, each line marked (isaac-acou)
     The session stays per space (isaac-ihuc); a mention answers the thread
     that addressed it, and every line — whichever thread it belongs to —
-    carries a [thread:xx] marker so Yopp can tell them apart.
+    carries a [thread:xx] marker so Isaac can tell them apart.
     Given the Chat API returns message "spaces/ENG/messages/40":
-      | sender.email | ada@tonotop.com       |
+      | sender.email | ada@marigold.example       |
       | thread.name  | spaces/ENG/threads/TA |
       | text         | deploy started        |
     And the Chat API returns message "spaces/ENG/messages/41":
-      | sender.email | ada@tonotop.com       |
+      | sender.email | ada@marigold.example       |
       | thread.name  | spaces/ENG/threads/TA |
       | text         | build is green        |
     And the Chat API returns message "spaces/ENG/messages/42":
-      | sender.email | ada@tonotop.com       |
+      | sender.email | ada@marigold.example       |
       | thread.name  | spaces/ENG/threads/TB |
       | text         | anyone up for lunch?  |
     And the Chat API returns message "spaces/ENG/messages/43":
-      | sender.email | ada@tonotop.com       |
+      | sender.email | ada@marigold.example       |
       | thread.name  | spaces/ENG/threads/TB |
       | text         | tacos again?          |
     And the Chat API returns message "spaces/ENG/messages/44":
-      | sender.email        | ada@tonotop.com        |
+      | sender.email        | ada@marigold.example        |
       | thread.name         | spaces/ENG/threads/TA  |
       | text                | @Isaac is it deployed? |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type | content   |
       | echo  | text | Deployed. |
@@ -607,7 +607,7 @@ Feature: Google Chat inbound gate
     And Google Chat delivers a message event for "spaces/ENG/messages/44"
     Then session "gchat-spaces-ENG" has transcript matching:
       | type    | message.role | message.content                                                                                                                                                                        |
-      | message | user         | #"(?s)\[thread:TA\] ada@tonotop\.com: deploy started.*\[thread:TA\] ada@tonotop\.com: build is green.*\[thread:TB\] ada@tonotop\.com: anyone up for lunch\?.*\[thread:TB\] ada@tonotop\.com: tacos again\?.*\[thread:TA\] ada@tonotop\.com: @Isaac is it deployed\?" |
+      | message | user         | #"(?s)\[thread:TA\] ada@marigold\.example: deploy started.*\[thread:TA\] ada@marigold\.example: build is green.*\[thread:TB\] ada@marigold\.example: anyone up for lunch\?.*\[thread:TB\] ada@marigold\.example: tacos again\?.*\[thread:TA\] ada@marigold\.example: @Isaac is it deployed\?" |
       | message | assistant    | Deployed.                                                                                                                                                                              |
     And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/ENG/messages" matches:
       | body.thread.name | spaces/ENG/threads/TA |
@@ -621,7 +621,7 @@ Feature: Google Chat inbound gate
     Then the last LLM request carries the gchat thread guidance exactly once
 
   Scenario: the guidance tells the crew where its own replies went and what a delivery note is
-    Yopp, 2026-10-07: its own replies carry no thread marker, so it could
+    Isaac, 2026-10-07: its own replies carry no thread marker, so it could
     not tell a question in another thread had been answered. A reply always
     posts into the thread of the message it answers, so the guidance says
     so, rather than marking the crew's own words (which it would copy into
@@ -637,16 +637,16 @@ Feature: Google Chat inbound gate
 
   Scenario: an entry's explicit session overrides the canonical name (isaac-ihuc)
     Given config:
-      | google.tonotop.topic                                | projects/marigold/topics/isaac |
+      | google.marigold.topic                                | projects/marigold/topics/isaac |
       | comms.gchat.gchat/spaces.spaces/AAQA7rg5Uyc.session | deploy-desk                    |
     And the Chat API knows space "spaces/AAQA7rg5Uyc":
-      | displayName | Yopp Test |
+      | displayName | Isaac Test |
       | spaceType   | SPACE     |
     And the Chat API returns message "spaces/AAQA7rg5Uyc/messages/1":
-      | sender.email        | ada@tonotop.com               |
+      | sender.email        | ada@marigold.example               |
       | thread.name         | spaces/AAQA7rg5Uyc/threads/T1 |
       | text                | @Isaac are you there?         |
-      | annotations.mention | users/yopp                    |
+      | annotations.mention | users/isaac                    |
     And the following model responses are queued:
       | model | type | content |
       | echo  | text | Here.   |
@@ -667,10 +667,10 @@ Feature: Google Chat inbound gate
       | comms.gchat.gchat/spaces.spaces/IA1.name | inbound-attach |
       | comms.gchat.gchat/spaces.spaces/IA1.crew | main           |
     And the Chat API returns message "spaces/IA1/messages/1":
-      | sender.email                                | ada@tonotop.com                        |
+      | sender.email                                | ada@marigold.example                        |
       | thread.name                                 | spaces/IA1/threads/T1                  |
       | text                                        | @Isaac what is this?                   |
-      | annotations.mention                         | users/yopp                             |
+      | annotations.mention                         | users/isaac                             |
       | attachment.0.contentName                    | report.pdf                             |
       | attachment.0.contentType                    | application/pdf                        |
       | attachment.0.attachmentDataRef.resourceName | spaces/IA1/attachments/att-1           |
@@ -686,7 +686,7 @@ Feature: Google Chat inbound gate
       | message | assistant    | A PDF, got it.                                                         |
 
   # Chat serves attachment bytes from the media endpoint (isaac-468y). The e2zb stub
-  # accepted any URL, so the wrong path went unnoticed until yopp got a 404.
+  # accepted any URL, so the wrong path went unnoticed until isaac got a 404.
 
   Scenario: an attachment is downloaded from Chat's media endpoint (isaac-468y)
     Given the crew "main" allows tools: "fs/*"
@@ -694,10 +694,10 @@ Feature: Google Chat inbound gate
       | comms.gchat.gchat/spaces.spaces/IA2.name | media-attach |
       | comms.gchat.gchat/spaces.spaces/IA2.crew | main         |
     And the Chat API returns message "spaces/IA2/messages/1":
-      | sender.email                                | ada@tonotop.com              |
+      | sender.email                                | ada@marigold.example              |
       | thread.name                                 | spaces/IA2/threads/T1        |
       | text                                        | @Isaac see attached          |
-      | annotations.mention                         | users/yopp                   |
+      | annotations.mention                         | users/isaac                   |
       | attachment.0.contentName                    | notes.txt                    |
       | attachment.0.contentType                    | text/plain                   |
       | attachment.0.attachmentDataRef.resourceName | spaces/IA2/attachments/att-2 |
@@ -719,10 +719,10 @@ Feature: Google Chat inbound gate
       | comms.gchat.gchat/spaces.spaces/IA3.name | png-attach |
       | comms.gchat.gchat/spaces.spaces/IA3.crew | main       |
     And the Chat API returns message "spaces/IA3/messages/1":
-      | sender.email                                | ada@tonotop.com              |
+      | sender.email                                | ada@marigold.example              |
       | thread.name                                 | spaces/IA3/threads/T1        |
       | text                                        | @Isaac what is this?         |
-      | annotations.mention                         | users/yopp                   |
+      | annotations.mention                         | users/isaac                   |
       | attachment.0.contentName                    | badge.png                    |
       | attachment.0.contentType                    | image/png                    |
       | attachment.0.attachmentDataRef.resourceName | spaces/IA3/attachments/att-3 |
@@ -748,20 +748,20 @@ Feature: Google Chat inbound gate
       | comms.gchat.gchat/spaces.spaces/DMQ.crew | main     |
     And session "gchat-spaces-dmq" is in flight
     And the Chat API returns message "spaces/DMQ/messages/1":
-      | sender.email        | ada@tonotop.com        |
+      | sender.email        | ada@marigold.example        |
       | thread.name         | spaces/DMQ/threads/T1  |
       | text                | @Isaac first           |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the Chat API returns message "spaces/DMQ/messages/2":
-      | sender.email        | ada@tonotop.com        |
+      | sender.email        | ada@marigold.example        |
       | thread.name         | spaces/DMQ/threads/T1  |
       | text                | @Isaac second          |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the Chat API returns message "spaces/DMQ/messages/3":
-      | sender.email        | ada@tonotop.com        |
+      | sender.email        | ada@marigold.example        |
       | thread.name         | spaces/DMQ/threads/T1  |
       | text                | @Isaac third           |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type | content              |
       | echo  | text | All three, answered. |

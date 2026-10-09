@@ -165,7 +165,7 @@
       (subs email (inc at)))))
 
 (defn email-matches?
-  "An allow-from entry against an email. \"*@tonotop.com\" admits every address
+  "An allow-from entry against an email. \"*@marigold.example\" admits every address
    in that domain; anything else is an exact, case-insensitive match. Chat's
    sender email comes from Google, so a domain pattern here is as trustworthy
    as the address itself — unlike Gmail, where From: is forgeable."

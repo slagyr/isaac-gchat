@@ -8,10 +8,10 @@ Feature: Google Chat outbound
     Given default Grover setup in "/test/gchat-outbound"
     And config:
       | log.output                               | memory              |
-      | google.tonotop.project                   | marigold            |
-      | comms.gchat.gchat/account                | yopp@tonotop.com    |
-      | comms.gchat.gchat/account-id             | users/yopp          |
-      | comms.gchat.gchat/allow-from             | ["ada@tonotop.com"] |
+      | google.marigold.project                   | marigold            |
+      | comms.gchat.gchat/account                | isaac@marigold.example    |
+      | comms.gchat.gchat/account-id             | users/isaac          |
+      | comms.gchat.gchat/allow-from             | ["ada@marigold.example"] |
       | comms.gchat.gchat/spaces.spaces/ENG.name | engineering         |
       | comms.gchat.gchat/spaces.spaces/ENG.crew | main                |
       | sessions.naming-strategy                 | sequential          |
@@ -20,10 +20,10 @@ Feature: Google Chat outbound
 
   Scenario: a turn's reply is posted in the originating thread as the Google user
     Given the Chat API returns message "spaces/ENG/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/ENG/threads/T1 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     And the following model responses are queued:
       | model | type | content    |
       | echo  | text | All green. |
@@ -36,19 +36,19 @@ Feature: Google Chat outbound
       | body.text                | All green.                           |
 
   Scenario: send! to a person resolves the DM space, creating it when absent
-    Given the Chat API has no direct message space with "bob@tonotop.com"
+    Given the Chat API has no direct message space with "bob@marigold.example"
     And the Chat API creates space "spaces/DMBOB" on setup
     When gchat comm send! is invoked with:
       | path     | value           |
-      | gchat/to | bob@tonotop.com |
+      | gchat/to | bob@marigold.example |
       | content  | Standup in 5.   |
     Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces:findDirectMessage" matches:
       | method     | GET                   |
-      | query.name | users/bob@tonotop.com |
+      | query.name | users/bob@marigold.example |
     And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces:setup" matches:
       | method                         | POST                  |
       | body.space.spaceType           | DIRECT_MESSAGE        |
-      | body.memberships.0.member.name | users/bob@tonotop.com |
+      | body.memberships.0.member.name | users/bob@marigold.example |
     And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DMBOB/messages" matches:
       | method    | POST          |
       | body.text | Standup in 5. |
@@ -76,10 +76,10 @@ Feature: Google Chat outbound
     Given config:
       | comms.gchat.gchat/message-cap | 13 |
     And the Chat API returns message "spaces/ENG/messages/2":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/ENG/threads/T2 |
       | text                | @Isaac report         |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     And the following model responses are queued:
       | model | type | content                          |
       | echo  | text | alpha bravo\ncharlie delta\necho |
@@ -98,10 +98,10 @@ Feature: Google Chat outbound
   Scenario: a reply Chat 403s in a joined room surfaces as a delivery failure, not a bare create-failed error (isaac-qry7)
     Given the Chat API refuses messages.create in "spaces/ENG" with 403
     And the Chat API returns message "spaces/ENG/messages/5":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/ENG/threads/T5 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type | content    |
       | echo  | text | All green. |
@@ -118,12 +118,12 @@ Feature: Google Chat outbound
     transcript; each reply still goes to the thread that addressed it, and
     the transcript keeps each message's thread marked.
     Given the Chat API returns message "spaces/DM2/messages/1":
-      | sender.email | ada@tonotop.com        |
+      | sender.email | ada@marigold.example        |
       | space.type   | DIRECT_MESSAGE         |
       | thread.name  | spaces/DM2/threads/TA  |
       | text         | did we ship yet?       |
     And the Chat API returns message "spaces/DM2/messages/2":
-      | sender.email | ada@tonotop.com          |
+      | sender.email | ada@marigold.example          |
       | space.type   | DIRECT_MESSAGE           |
       | thread.name  | spaces/DM2/threads/TB    |
       | text         | are you free for lunch? |
@@ -133,11 +133,11 @@ Feature: Google Chat outbound
       | echo  | text | Yes.     |
     When Google Chat delivers a message event for "spaces/DM2/messages/1"
     And Google Chat delivers a message event for "spaces/DM2/messages/2"
-    Then session "gchat-tonotop-spaces-dm2" has transcript matching:
+    Then session "gchat-marigold-spaces-dm2" has transcript matching:
       | type    | message.role | message.content                                              |
-      | message | user         | #"\[thread:TA\] ada@tonotop\.com: did we ship yet\?"         |
+      | message | user         | #"\[thread:TA\] ada@marigold\.example: did we ship yet\?"         |
       | message | assistant    | Not yet.                                                     |
-      | message | user         | #"\[thread:TB\] ada@tonotop\.com: are you free for lunch\?"  |
+      | message | user         | #"\[thread:TB\] ada@marigold\.example: are you free for lunch\?"  |
       | message | assistant    | Yes.                                                          |
     And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM2/messages" matches:
       | #index           | 0                     |
@@ -150,12 +150,12 @@ Feature: Google Chat outbound
 
   Scenario: what Isaac sends does not come back as a turn
     Given the Chat API returns message "spaces/ENG/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/ENG/threads/T1 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     And the Chat API returns message "spaces/ENG/messages/9":
-      | sender.email | yopp@tonotop.com      |
+      | sender.email | isaac@marigold.example      |
       | thread.name  | spaces/ENG/threads/T1 |
       | text         | All green.            |
     And the following model responses are queued:
@@ -180,10 +180,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/ERR1.name | errors |
       | comms.gchat.gchat/spaces.spaces/ERR1.crew | main   |
     And the Chat API returns message "spaces/ERR1/messages/10":
-      | sender.email        | ada@tonotop.com         |
+      | sender.email        | ada@marigold.example         |
       | thread.name         | spaces/ERR1/threads/T10 |
       | text                | @Isaac status?          |
-      | annotations.mention | users/yopp              |
+      | annotations.mention | users/isaac              |
     And the following model responses are queued:
       | model | type  | content                         |
       | echo  | error | wire format mismatch: token xy9 |
@@ -199,10 +199,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/WX1.name | wall-one |
       | comms.gchat.gchat/spaces.spaces/WX1.crew | main     |
     And the Chat API returns message "spaces/WX1/messages/20":
-      | sender.email        | ada@tonotop.com         |
+      | sender.email        | ada@marigold.example         |
       | thread.name         | spaces/WX1/threads/T20  |
       | text                | @Isaac status?          |
-      | annotations.mention | users/yopp              |
+      | annotations.mention | users/isaac              |
     And the following model responses are queued:
       | model | type       | status | retry-after |
       | echo  | http-error | 429    | 60          |
@@ -218,15 +218,15 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/WX2.name | wall-two |
       | comms.gchat.gchat/spaces.spaces/WX2.crew | main     |
     And the Chat API returns message "spaces/WX2/messages/30":
-      | sender.email        | ada@tonotop.com         |
+      | sender.email        | ada@marigold.example         |
       | thread.name         | spaces/WX2/threads/T30  |
       | text                | @Isaac status?          |
-      | annotations.mention | users/yopp              |
+      | annotations.mention | users/isaac              |
     And the Chat API returns message "spaces/WX2/messages/31":
-      | sender.email        | ada@tonotop.com         |
+      | sender.email        | ada@marigold.example         |
       | thread.name         | spaces/WX2/threads/T30  |
       | text                | @Isaac still there?     |
-      | annotations.mention | users/yopp              |
+      | annotations.mention | users/isaac              |
     And the following model responses are queued:
       | model | type       | status | retry-after |
       | echo  | http-error | 429    | 60          |
@@ -246,15 +246,15 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/WX3.name | wall-three |
       | comms.gchat.gchat/spaces.spaces/WX3.crew | main       |
     And the Chat API returns message "spaces/WX3/messages/40":
-      | sender.email        | ada@tonotop.com         |
+      | sender.email        | ada@marigold.example         |
       | thread.name         | spaces/WX3/threads/T40  |
       | text                | @Isaac status?          |
-      | annotations.mention | users/yopp              |
+      | annotations.mention | users/isaac              |
     And the Chat API returns message "spaces/WX3/messages/41":
-      | sender.email        | ada@tonotop.com         |
+      | sender.email        | ada@marigold.example         |
       | thread.name         | spaces/WX3/threads/T40  |
       | text                | @Isaac still there?     |
-      | annotations.mention | users/yopp              |
+      | annotations.mention | users/isaac              |
     And the following model responses are queued:
       | model | type       | status | retry-after |
       | echo  | http-error | 429    | 60          |
@@ -277,10 +277,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/RX1.name | reactions-one |
       | comms.gchat.gchat/spaces.spaces/RX1.crew | main          |
     And the Chat API returns message "spaces/RX1/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/RX1/threads/T1 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type | content    |
       | echo  | text | All green. |
@@ -302,10 +302,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/RX2.name | reactions-two |
       | comms.gchat.gchat/spaces.spaces/RX2.crew | main          |
     And the Chat API returns message "spaces/RX2/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/RX2/threads/T1 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type  | content                         |
       | echo  | error | wire format mismatch: token xy9 |
@@ -324,15 +324,15 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/RX3.name | reactions-three |
       | comms.gchat.gchat/spaces.spaces/RX3.crew | main            |
     And the Chat API returns message "spaces/RX3/messages/1":
-      | sender.email        | ada@tonotop.com         |
+      | sender.email        | ada@marigold.example         |
       | thread.name         | spaces/RX3/threads/T1   |
       | text                | @Isaac status?          |
-      | annotations.mention | users/yopp              |
+      | annotations.mention | users/isaac              |
     And the Chat API returns message "spaces/RX3/messages/2":
-      | sender.email        | ada@tonotop.com         |
+      | sender.email        | ada@marigold.example         |
       | thread.name         | spaces/RX3/threads/T1   |
       | text                | @Isaac still there?     |
-      | annotations.mention | users/yopp              |
+      | annotations.mention | users/isaac              |
     And the following model responses are queued:
       | model | type       | status | retry-after |
       | echo  | http-error | 429    | 60          |
@@ -355,7 +355,7 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/RX4.name | reactions-four |
       | comms.gchat.gchat/spaces.spaces/RX4.crew | main           |
     And the Chat API returns message "spaces/RX4/messages/1":
-      | sender.email | ada@tonotop.com       |
+      | sender.email | ada@marigold.example       |
       | thread.name  | spaces/RX4/threads/T1 |
       | text         | anyone around?        |
     When Google Chat delivers a message event for "spaces/RX4/messages/1"
@@ -367,10 +367,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/RX5.name  | reactions-five |
       | comms.gchat.gchat/spaces.spaces/RX5.crew  | main           |
     And the Chat API returns message "spaces/RX5/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/RX5/threads/T1 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type | content    |
       | echo  | text | All clear. |
@@ -389,10 +389,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/RX6.name | reactions-six |
       | comms.gchat.gchat/spaces.spaces/RX6.crew | main          |
     And the Chat API returns message "spaces/RX6/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/RX6/threads/T1 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type      | content         | tool_call     | arguments |
       | echo  | reasoning | First thought.  |               |           |
@@ -424,10 +424,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/RX7.name | reactions-seven |
       | comms.gchat.gchat/spaces.spaces/RX7.crew | main            |
     And the Chat API returns message "spaces/RX7/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/RX7/threads/T1 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type | content | tool_call     | arguments |
       | echo  |      |         | gchat__spaces | {}        |
@@ -456,10 +456,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/RX8.name | reactions-eight |
       | comms.gchat.gchat/spaces.spaces/RX8.crew | main            |
     And the Chat API returns message "spaces/RX8/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/RX8/threads/T1 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp             |
+      | annotations.mention | users/isaac             |
     And the following model responses are queued:
       | model | type      | content        | tool_call     | arguments |
       | echo  | reasoning | Thinking away. |               |           |
@@ -492,10 +492,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/OS1.name | one-send |
       | comms.gchat.gchat/spaces.spaces/OS1.crew | main     |
     And the Chat API returns message "spaces/OS1/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/OS1/threads/T1 |
       | text                | @Isaac status?        |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     And the following model responses are queued:
       | model | type | content    | tool_call  | arguments                                                                                                  |
       | echo  |      |            | comm__send | {"comm":"gchat","gchat.space":"spaces/OS1","gchat.thread":"spaces/OS1/threads/T1","content":"Looking now."} |
@@ -522,10 +522,10 @@ Feature: Google Chat outbound
       | comms.gchat.gchat/spaces.spaces/AT1.crew | main       |
     And a file "report.pdf" exists in the session working directory with content "%PDF-1.4 stub"
     And the Chat API returns message "spaces/AT1/messages/1":
-      | sender.email        | ada@tonotop.com       |
+      | sender.email        | ada@marigold.example       |
       | thread.name         | spaces/AT1/threads/T1 |
       | text                | @Isaac send the report |
-      | annotations.mention | users/yopp            |
+      | annotations.mention | users/isaac            |
     And the following model responses are queued:
       | model | type | content | tool_call  | arguments                                                                                                                                       |
       | echo  |      |         | comm__send | {"comm":"gchat","gchat.space":"spaces/AT1","gchat.thread":"spaces/AT1/threads/T1","content":"Here is the report.","attachments":["report.pdf"]} |
@@ -579,28 +579,28 @@ Feature: Google Chat outbound
       | body.text | gchat is unreachable. |
 
   Scenario: send! with a generic :target that is an email reaches that person's DM, creating it when absent
-    Given the Chat API has no direct message space with "bob@tonotop.com"
+    Given the Chat API has no direct message space with "bob@marigold.example"
     And the Chat API creates space "spaces/DMBOB" on setup
     When gchat comm send! is invoked with:
       | path    | value           |
-      | target  | bob@tonotop.com |
+      | target  | bob@marigold.example |
       | content | Standup in 5.   |
     Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces:findDirectMessage" matches:
       | method     | GET                   |
-      | query.name | users/bob@tonotop.com |
+      | query.name | users/bob@marigold.example |
     And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DMBOB/messages" matches:
       | method    | POST          |
       | body.text | Standup in 5. |
 
   Scenario: a queued delivery addressed to an email, as a cron job's to is, reaches the person instead of dead-lettering
-    Given the Chat API has no direct message space with "bob@tonotop.com"
+    Given the Chat API has no direct message space with "bob@marigold.example"
     And the Chat API creates space "spaces/DMBOB" on setup
     And the isaac EDN file "comm/delivery/pending/CR1.edn" exists with:
       | path     | value               |
       | id       | CR1                 |
       | comm     | :gchat              |
-      | target   | bob@tonotop.com     |
-      | to       | bob@tonotop.com     |
+      | target   | bob@marigold.example     |
+      | to       | bob@marigold.example     |
       | content  | Your weekly digest. |
       | attempts | 0                   |
     When the delivery worker ticks
@@ -613,7 +613,7 @@ Feature: Google Chat outbound
     When gchat comm send! is invoked with:
       | path        | value           |
       | gchat/space | spaces/GT2      |
-      | target      | bob@tonotop.com |
+      | target      | bob@marigold.example |
       | content     | Pick me.        |
     Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/GT2/messages" matches:
       | method    | POST     |
@@ -626,20 +626,20 @@ Feature: Google Chat outbound
     the delivery worker can append the post to that session (agent:
     features/comm/delivery/comm_continuity.feature).
     Given config:
-      | google.tonotop.topic         | projects/marigold/topics/isaac |
-      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"]          |
+      | google.marigold.topic         | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/allow-from | ["hieronymus@marigold.example"]          |
     And the Chat API knows space "spaces/DMM":
       | spaceType | DIRECT_MESSAGE |
     And the Chat API returns message "spaces/DMM/messages/1":
-      | sender.email       | micah@tonotop.com     |
-      | sender.displayName | Micah Martin          |
+      | sender.email       | hieronymus@marigold.example     |
+      | sender.displayName | Hieronymus Finch          |
       | thread.name        | spaces/DMM/threads/T1 |
       | text               | are you there?        |
     And the following model responses are queued:
       | model | type | content |
       | echo  | text | Here.   |
     When Google Chat delivers a message event for "spaces/DMM/messages/1"
-    Then session "gchat-tonotop-dm-micah-martin" has transcript matching:
+    Then session "gchat-marigold-dm-hieronymus-finch" has transcript matching:
       | type    | message.role | message.content        |
       | message | user         | #".*are you there\?.*" |
       | message | assistant    | Here.                  |
@@ -657,27 +657,27 @@ Feature: Google Chat outbound
       | #index    | 1                   |
       | method    | POST                |
       | body.text | Your weekly digest. |
-    And session "gchat-tonotop-dm-micah-martin" has transcript matching:
+    And session "gchat-marigold-dm-hieronymus-finch" has transcript matching:
       | type    | message.role | message.content                                                                    |
       | message | user         | #".*are you there\?.*"                                                             |
       | message | assistant    | Here.                                                                              |
       | message | assistant    | #"\[sent here by crew herald from session cron-heartbeat\] Your weekly digest\." |
 
   Scenario: a delivery's note leads with the thread marker of the thread it started
-    Yopp, 2026-10-06: the note landed in the DM session with no thread, so it
-    could not be tied to the thread Micah answered in. send! reports
+    Isaac, 2026-10-06: the note landed in the DM session with no thread, so it
+    could not be tied to the thread Hieronymus answered in. send! reports
     :marker, the [thread:…] marker an inbound line from that thread carries;
     the worker leads the note with it. A post with no gchat/thread starts a
     new thread, and Chat's create response names it (the fake answers a
     create with the request's thread, or <space>/threads/posted).
     Given config:
-      | google.tonotop.topic         | projects/marigold/topics/isaac |
-      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"]          |
+      | google.marigold.topic         | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/allow-from | ["hieronymus@marigold.example"]          |
     And the Chat API knows space "spaces/DMM":
       | spaceType | DIRECT_MESSAGE |
     And the Chat API returns message "spaces/DMM/messages/1":
-      | sender.email       | micah@tonotop.com     |
-      | sender.displayName | Micah Martin          |
+      | sender.email       | hieronymus@marigold.example     |
+      | sender.displayName | Hieronymus Finch          |
       | thread.name        | spaces/DMM/threads/T1 |
       | text               | are you there?        |
     And the following model responses are queued:
@@ -694,19 +694,19 @@ Feature: Google Chat outbound
       | session  | cron-heartbeat      |
       | attempts | 0                   |
     When the delivery worker ticks
-    Then session "gchat-tonotop-dm-micah-martin" has transcript matching:
+    Then session "gchat-marigold-dm-hieronymus-finch" has transcript matching:
       | type    | message.role | message.content                                                                                     |
       | message | assistant    | #"\[thread:posted\] \[sent here by crew herald from session cron-heartbeat\] Your weekly digest\." |
 
   Scenario: a delivery into an existing thread leads its note with that thread's marker
     Given config:
-      | google.tonotop.topic         | projects/marigold/topics/isaac |
-      | comms.gchat.gchat/allow-from | ["micah@tonotop.com"]          |
+      | google.marigold.topic         | projects/marigold/topics/isaac |
+      | comms.gchat.gchat/allow-from | ["hieronymus@marigold.example"]          |
     And the Chat API knows space "spaces/DMM":
       | spaceType | DIRECT_MESSAGE |
     And the Chat API returns message "spaces/DMM/messages/1":
-      | sender.email       | micah@tonotop.com     |
-      | sender.displayName | Micah Martin          |
+      | sender.email       | hieronymus@marigold.example     |
+      | sender.displayName | Hieronymus Finch          |
       | thread.name        | spaces/DMM/threads/T1 |
       | text               | are you there?        |
     And the following model responses are queued:
@@ -727,6 +727,6 @@ Feature: Google Chat outbound
     Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DMM/messages" matches:
       | method           | POST                  |
       | body.thread.name | spaces/DMM/threads/T1 |
-    And session "gchat-tonotop-dm-micah-martin" has transcript matching:
+    And session "gchat-marigold-dm-hieronymus-finch" has transcript matching:
       | type    | message.role | message.content                                                                               |
       | message | assistant    | #"\[thread:T1\] \[sent here by crew herald from session cron-heartbeat\] Still on for 3pm\." |

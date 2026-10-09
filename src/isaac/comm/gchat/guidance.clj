@@ -1,7 +1,7 @@
 (ns isaac.comm.gchat.guidance
   "The standing instruction gchat attaches to every turn it dispatches
    (isaac-acou). The session is per space, not per thread (isaac-ihuc), so one
-   transcript holds every thread in the space; this text tells Yopp how to
+   transcript holds every thread in the space; this text tells Isaac how to
    read it — group by the [thread:...] markers on each line, answer the
    thread that was addressed, and treat other threads as separate
    conversations. It rides the charge's :guidance, which the prompt builder

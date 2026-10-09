@@ -17,8 +17,8 @@
     c))
 
 (def slice
-  {:gchat/account     "yopp@tonotop.com"
-   :gchat/allow-from  ["ada@tonotop.com"]
+  {:gchat/account     "isaac@marigold.example"
+   :gchat/allow-from  ["ada@marigold.example"]
    :gchat/spaces      {:spaces/ENG {:name "engineering" :crew "main"}}
    :gchat/message-cap 4096})
 
@@ -56,9 +56,9 @@
                     chat-api/create-message! (fn [opts]
                                                (swap! calls conj [:create opts])
                                                {:name "m1"})]
-        (should= {:ok true :target "spaces/DMBOB"} (comm/send! c {:target "bob@tonotop.com" :content "Standup in 5."}))
-        (should= [:find "bob@tonotop.com" "at-1"] (first @calls))
-        (should= [:setup "bob@tonotop.com" "at-1"] (second @calls))
+        (should= {:ok true :target "spaces/DMBOB"} (comm/send! c {:target "bob@marigold.example" :content "Standup in 5."}))
+        (should= [:find "bob@marigold.example" "at-1"] (first @calls))
+        (should= [:setup "bob@marigold.example" "at-1"] (second @calls))
         (should= "spaces/DMBOB" (get-in (nth @calls 2) [1 :space])))))
 
   (it "prefers a gchat space to the generic target"
@@ -108,9 +108,9 @@
                     chat-api/create-message! (fn [opts]
                                                (swap! calls conj [:create opts])
                                                {:name "m1"})]
-        (should= {:ok true :target "spaces/DMBOB"} (comm/send! c {:gchat/to "bob@tonotop.com" :content "Standup in 5."}))
-        (should= [:find "bob@tonotop.com" "at-1"] (first @calls))
-        (should= [:setup "bob@tonotop.com" "at-1"] (second @calls))
+        (should= {:ok true :target "spaces/DMBOB"} (comm/send! c {:gchat/to "bob@marigold.example" :content "Standup in 5."}))
+        (should= [:find "bob@marigold.example" "at-1"] (first @calls))
+        (should= [:setup "bob@marigold.example" "at-1"] (second @calls))
         (should= "spaces/DMBOB" (get-in (nth @calls 2) [1 :space]))
         (should= "Standup in 5." (get-in (nth @calls 2) [1 :text])))))
 
@@ -207,11 +207,11 @@
         (with-redefs [sut/-full-cfg (constantly {:attention {:notify {:comm "logbook" :target "ops-room"}}})
                       chat-api/create-message! (fn [_] (reset! posted true) {:name "m1"})
                       delivery-queue/enqueue! (fn [record] (reset! created record) record)]
-          (comm/on-cycle-start c "gchat-tonotop-dm-cordelia"
+          (comm/on-cycle-start c "gchat-marigold-dm-cordelia"
                                {:origin {:kind :gchat :space "spaces/INV1" :thread "spaces/INV1/threads/T1"
                                         :display-name "Cordelia" :invited? true}})
           (log/capture-logs
-            (comm/on-reply c "gchat-tonotop-dm-cordelia" "Standing by."))
+            (comm/on-reply c "gchat-marigold-dm-cordelia" "Standing by."))
           (should-not @posted)
           (should= :logbook (:comm @created))
           (should= "ops-room" (:target @created))
@@ -225,11 +225,11 @@
         (with-redefs [sut/-full-cfg (constantly {})
                       chat-api/create-message! (fn [_] (reset! posted true) {:name "m1"})
                       delivery-queue/enqueue! (fn [_] (throw (ex-info "must not enqueue" {})))]
-          (comm/on-cycle-start c "gchat-tonotop-dm-cordelia"
+          (comm/on-cycle-start c "gchat-marigold-dm-cordelia"
                                {:origin {:kind :gchat :space "spaces/INV1" :thread "spaces/INV1/threads/T1"
                                         :invited? true}})
           (log/capture-logs
-            (comm/on-reply c "gchat-tonotop-dm-cordelia" "Standing by.")
+            (comm/on-reply c "gchat-marigold-dm-cordelia" "Standing by.")
             (should-not @posted)
             (should (some #(= :gchat.dm/reply-diverted (:event %)) @log/captured-logs)))))))
 

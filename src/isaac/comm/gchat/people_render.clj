@@ -6,7 +6,7 @@
     [isaac.google.people :as people]))
 
 (defn sender-label
-  "\"Micah Martin <micah@tonotop.com>\", degrading to whatever Chat gave."
+  "\"Hieronymus Finch <hieronymus@marigold.example>\", degrading to whatever Chat gave."
   [message]
   (let [sender (:sender message)
         user   (:name sender)

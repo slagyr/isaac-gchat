@@ -3,19 +3,19 @@
     [isaac.comm.gchat.gate :as sut]
     [speclj.core :refer :all]))
 
-(def account "yopp@tonotop.com")
+(def account "isaac@marigold.example")
 
 (def cfg
   {:gchat/account    account
-   :gchat/account-id "users/yopp"
-   :gchat/allow-from ["ada@tonotop.com"]
+   :gchat/account-id "users/isaac"
+   :gchat/allow-from ["ada@marigold.example"]
    :gchat/spaces     {:spaces/ENG {:name "Engineering" :crew "main"}}})
 
 (defn message
   [& {:keys [email text mention space-type name]
-      :or   {email      "ada@tonotop.com"
+      :or   {email      "ada@marigold.example"
              text       "@Isaac can you look at the deploy?"
-             mention    "users/yopp"
+             mention    "users/isaac"
              space-type "SPACE"
              name       "spaces/ENG/messages/1"}}]
   (cond-> {:name         name
@@ -27,7 +27,7 @@
 
 (def human
   (-> (message)
-      (assoc :sender {:name "users/118" :displayName "Micah Martin" :domainId "0ivzlyj"})))
+      (assoc :sender {:name "users/118" :displayName "Hieronymus Finch" :domainId "0marigold"})))
 
 (defn in-space
   "A space message carrying exactly these annotations."
@@ -44,10 +44,10 @@
 
   (it "routes to the operator's default crew when neither the space nor the comm names one (isaac-rfmh)"
     (let [bare (assoc cfg :gchat/spaces {:spaces/ENG {:name "Engineering"}})]
-      (should= "yopp" (:crew (sut/decide bare (message) {:default-crew :yopp})))
-      (should= "yopp" (:crew (sut/decide bare (message) {:default-crew "yopp"})))
-      (should= "ops"  (:crew (sut/decide (assoc bare :crew "ops") (message) {:default-crew :yopp})))
-      (should= "main" (:crew (sut/decide cfg (message) {:default-crew :yopp})))
+      (should= "isaac" (:crew (sut/decide bare (message) {:default-crew :isaac})))
+      (should= "isaac" (:crew (sut/decide bare (message) {:default-crew "isaac"})))
+      (should= "ops"  (:crew (sut/decide (assoc bare :crew "ops") (message) {:default-crew :isaac})))
+      (should= "main" (:crew (sut/decide cfg (message) {:default-crew :isaac})))
       (should-be-nil (:crew (sut/decide bare (message))))))
 
   (it "routes a mention in a configured space"
@@ -64,7 +64,7 @@
       (should= :logged (:reason result))
       (should= "spaces/ENG" (:space result))
       (should= "lunch anyone?" (:text result))
-      (should= "ada@tonotop.com" (:sender result))))
+      (should= "ada@marigold.example" (:sender result))))
 
   (it "routes a DM without a mention"
     (let [result (sut/decide cfg (message :name "spaces/DM1/messages/1"
@@ -80,22 +80,22 @@
       (should= :self (:reason result))))
 
   (it "admits a human sender Google reports as users/<id> with no email, when the allow-list names the id"
-    (let [human (-> (message) (assoc :sender {:name "users/118285940969606191299" :displayName "Micah Martin" :type "HUMAN" :domainId "0ivzlyj"}))
-          cfg'  (assoc cfg :gchat/allow-from ["users/118285940969606191299"])]
+    (let [human (-> (message) (assoc :sender {:name "users/100000000000000000001" :displayName "Hieronymus Finch" :type "HUMAN" :domainId "0marigold"}))
+          cfg'  (assoc cfg :gchat/allow-from ["users/100000000000000000001"])]
       (should= :route (:action (sut/decide cfg' human)))
       ;; no email to render without a lookup, so the display name names who spoke
-      (should= "Micah Martin" (:sender (sut/decide cfg' human)))))
+      (should= "Hieronymus Finch" (:sender (sut/decide cfg' human)))))
 
   (it "admits any sender in the Workspace when the allow-list names domain:<domainId>"
-    (let [human (-> (message) (assoc :sender {:name "users/42" :type "HUMAN" :domainId "0ivzlyj"}))]
-      (should= :route (:action (sut/decide (assoc cfg :gchat/allow-from ["domain:0ivzlyj"]) human)))
+    (let [human (-> (message) (assoc :sender {:name "users/42" :type "HUMAN" :domainId "0marigold"}))]
+      (should= :route (:action (sut/decide (assoc cfg :gchat/allow-from ["domain:0marigold"]) human)))
       (should= :drop (:action (sut/decide (assoc cfg :gchat/allow-from ["domain:other"]) human)))))
 
   (it "names the sender it dropped so the operator can allow it"
-    (let [human (-> (message) (assoc :sender {:name "users/42" :type "HUMAN" :domainId "0ivzlyj"}))
+    (let [human (-> (message) (assoc :sender {:name "users/42" :type "HUMAN" :domainId "0marigold"}))
           d     (sut/decide cfg human)]
       (should= :sender (:reason d))
-      (should= {:email nil :user "users/42" :domain "0ivzlyj"} (:sender d))))
+      (should= {:email nil :user "users/42" :domain "0marigold"} (:sender d))))
 
   (it "drops an unknown sender"
     (let [result (sut/decide cfg (message :email "mallory@example.com"))]
@@ -122,24 +122,24 @@
 
     (it "routes it — belonging to the space is the grant"
       (let [result (sut/decide cfg (message :name "spaces/AAQA7rg5Uyc/messages/1")
-                               {:space-info {:displayName "Yopp Test" :spaceType "SPACE"}})]
+                               {:space-info {:displayName "Isaac Test" :spaceType "SPACE"}})]
         (should= :route (:action result))
-        (should= "gchat-yopp-test" (:session-key result))
+        (should= "gchat-isaac-test" (:session-key result))
         (should= #{:space:AAQA7rg5Uyc} (:tags result))))
 
     (it "names a DM for the member who spoke"
       (let [result (sut/decide cfg (-> (message :name "spaces/DM1/messages/1" :mention nil)
-                                       (assoc :sender {:email "ada@tonotop.com"
-                                                       :displayName "Micah Martin"}))
+                                       (assoc :sender {:email "ada@marigold.example"
+                                                       :displayName "Hieronymus Finch"}))
                                {:space-info {:spaceType "DIRECT_MESSAGE"}})]
         (should= :route (:action result))
-        (should= "gchat-dm-micah-martin" (:session-key result))))
+        (should= "gchat-dm-hieronymus-finch" (:session-key result))))
 
     (it "always carries the organization, so a session says whose space it is"
       (let [result (sut/decide cfg (message :name "spaces/AAQA7rg5Uyc/messages/1")
-                               {:tenant :tonotop
-                                :space-info {:displayName "Yopp Test"}})]
-        (should= "gchat-tonotop-yopp-test" (:session-key result))))
+                               {:tenant :marigold
+                                :space-info {:displayName "Isaac Test"}})]
+        (should= "gchat-marigold-isaac-test" (:session-key result))))
 
     (it "an entry that pins a session keeps it, and does not claim the space tag"
       (let [cfg'   (assoc-in cfg [:gchat/spaces :spaces/ENG :session] "deploy-desk")
@@ -155,18 +155,18 @@
   (context "resolving who spoke"
 
     (it "admits an email allow-list entry when the sender id resolves to that email"
-      (let [cfg' (assoc cfg :gchat/allow-from ["micah@tonotop.com"])
-            d    (sut/decide cfg' human {:resolve-person (resolver {:display-name "Micah Martin"
-                                                                    :email        "micah@tonotop.com"})})]
+      (let [cfg' (assoc cfg :gchat/allow-from ["hieronymus@marigold.example"])
+            d    (sut/decide cfg' human {:resolve-person (resolver {:display-name "Hieronymus Finch"
+                                                                    :email        "hieronymus@marigold.example"})})]
         (should= :route (:action d))
-        (should= "Micah Martin <micah@tonotop.com>" (:sender d))))
+        (should= "Hieronymus Finch <hieronymus@marigold.example>" (:sender d))))
 
     (it "asks nobody when the message already carries an email"
       (let [asked (atom 0)
             d     (sut/decide cfg (message) {:resolve-person (fn [& _] (swap! asked inc) nil)})]
         (should= :route (:action d))
         (should= 0 @asked)
-        (should= "ada@tonotop.com" (:sender d))))
+        (should= "ada@marigold.example" (:sender d))))
 
     (it "still admits a sender the id list names when the lookup fails"
       (let [cfg' (assoc cfg :gchat/allow-from ["users/118"])
@@ -175,15 +175,15 @@
                                                             :display-name (:display-name opts)
                                                             :email        nil})})]
         (should= :route (:action d))
-        (should= "Micah Martin" (:sender d))))
+        (should= "Hieronymus Finch" (:sender d))))
 
     (it "falls back to domain:<id> when the lookup fails"
-      (let [cfg' (assoc cfg :gchat/allow-from ["domain:0ivzlyj"])
+      (let [cfg' (assoc cfg :gchat/allow-from ["domain:0marigold"])
             d    (sut/decide cfg' human {:resolve-person (constantly nil)})]
         (should= :route (:action d))))
 
     (it "resolves nothing without a resolver"
-      (let [cfg' (assoc cfg :gchat/allow-from ["micah@tonotop.com"])
+      (let [cfg' (assoc cfg :gchat/allow-from ["hieronymus@marigold.example"])
             d    (sut/decide cfg' human)]
         (should= :drop (:action d))
         (should= :sender (:reason d))))
@@ -202,21 +202,21 @@
       (should= :log (:action (sut/decide cfg (in-space {:userMention {:user {:name "users/chris"}}})))))
 
     (it "answers a mention of the account's users/<id>, in either annotation shape"
-      (should= :route (:action (sut/decide cfg (in-space {:mention "users/yopp"}))))
-      (should= :route (:action (sut/decide cfg (in-space {:userMention {:user {:name "users/yopp"}}}))))
+      (should= :route (:action (sut/decide cfg (in-space {:mention "users/isaac"}))))
+      (should= :route (:action (sut/decide cfg (in-space {:userMention {:user {:name "users/isaac"}}}))))
       (should= :route (:action (sut/decide cfg (in-space [{:userMention {:user {:name "users/chris"}}}
-                                                          {:userMention {:user {:name "users/yopp"}}}])))))
+                                                          {:userMention {:user {:name "users/isaac"}}}])))))
 
     (it "answers a mention that names the account by email, in either annotation shape"
       (let [cfg' (dissoc cfg :gchat/account-id)]
-        (should= :route (:action (sut/decide cfg' (in-space {:userMention {:user {:name "users/9" :email "Yopp@tonotop.com"}}}))))
+        (should= :route (:action (sut/decide cfg' (in-space {:userMention {:user {:name "users/9" :email "Isaac@marigold.example"}}}))))
         (should= :route (:action (sut/decide cfg' (in-space [{:userMention {:user {:name "users/9" :email account}}}]))))
-        (should= :log (:action (sut/decide cfg' (in-space [{:userMention {:user {:name "users/9" :email "chris@tonotop.com"}}}]))))))
+        (should= :log (:action (sut/decide cfg' (in-space [{:userMention {:user {:name "users/9" :email "chris@marigold.example"}}}]))))))
 
     (it "knows the account by the id the handler learned when config names none"
       (let [cfg' (dissoc cfg :gchat/account-id)]
         (should= :route (:action (sut/decide cfg' (in-space {:mention "users/42"}) {:account-user "users/42"})))
-        (should= :log (:action (sut/decide cfg' (in-space {:mention "users/yopp"}) {:account-user "users/42"})))))
+        (should= :log (:action (sut/decide cfg' (in-space {:mention "users/isaac"}) {:account-user "users/42"})))))
 
     (it "asks who a mentioned user is when the account's id is not known yet"
       (let [cfg' (dissoc cfg :gchat/account-id)
@@ -237,39 +237,39 @@
   (context "allow-from patterns (isaac-dymn)"
 
     (it "admits every address in a domain the list names as *@domain"
-      (let [cfg' (assoc cfg :gchat/allow-from ["*@tonotop.com"])]
-        (should= :route (:action (sut/decide cfg' (message :email "ada@tonotop.com"))))
-        (should= :route (:action (sut/decide cfg' (message :email "grace@tonotop.com"))))))
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@marigold.example"])]
+        (should= :route (:action (sut/decide cfg' (message :email "ada@marigold.example"))))
+        (should= :route (:action (sut/decide cfg' (message :email "grace@marigold.example"))))))
 
     (it "matches a pattern and an address without regard to case"
-      (let [cfg' (assoc cfg :gchat/allow-from ["*@Tonotop.com" "Ada@tonotop.com"])]
-        (should= :route (:action (sut/decide cfg' (message :email "GRACE@TONOTOP.COM"))))
-        (should= :route (:action (sut/decide cfg' (message :email "ada@TONOTOP.com"))))))
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@Marigold.example" "Ada@marigold.example"])]
+        (should= :route (:action (sut/decide cfg' (message :email "GRACE@Marigold.Example"))))
+        (should= :route (:action (sut/decide cfg' (message :email "ada@Marigold.example"))))))
 
     (it "drops an address outside the pattern's domain"
-      (let [cfg'   (assoc cfg :gchat/allow-from ["*@tonotop.com"])
+      (let [cfg'   (assoc cfg :gchat/allow-from ["*@marigold.example"])
             result (sut/decide cfg' (message :email "mallory@example.com"))]
         (should= :drop (:action result))
         (should= :sender (:reason result))))
 
     (it "does not let a domain pattern match an address that merely ends with it"
-      (let [cfg' (assoc cfg :gchat/allow-from ["*@tonotop.com"])]
-        (should= :drop (:action (sut/decide cfg' (message :email "eve@nottonotop.com"))))
-        (should= :drop (:action (sut/decide cfg' (message :email "eve@tonotop.com.evil.net"))))))
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@marigold.example"])]
+        (should= :drop (:action (sut/decide cfg' (message :email "eve@notmarigold.example"))))
+        (should= :drop (:action (sut/decide cfg' (message :email "eve@marigold.example.evil.net"))))))
 
     (it "admits a Chat sender whose id resolves into the pattern's domain"
-      (let [cfg' (assoc cfg :gchat/allow-from ["*@tonotop.com"])
-            d    (sut/decide cfg' human {:resolve-person (resolver {:display-name "Micah Martin"
-                                                                    :email        "micah@tonotop.com"})})]
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@marigold.example"])
+            d    (sut/decide cfg' human {:resolve-person (resolver {:display-name "Hieronymus Finch"
+                                                                    :email        "hieronymus@marigold.example"})})]
         (should= :route (:action d))
-        (should= "Micah Martin <micah@tonotop.com>" (:sender d))))
+        (should= "Hieronymus Finch <hieronymus@marigold.example>" (:sender d))))
 
     (it "still fails closed on an empty allow-from"
       (let [cfg' (assoc cfg :gchat/allow-from [])]
         (should= :drop (:action (sut/decide cfg' (message))))))
 
     (it "matches an entry that is a bare pattern against nothing when the sender has no email"
-      (let [cfg' (assoc cfg :gchat/allow-from ["*@tonotop.com"])
+      (let [cfg' (assoc cfg :gchat/allow-from ["*@marigold.example"])
             d    (sut/decide cfg' human {:resolve-person (constantly nil)})]
         (should= :drop (:action d))
         (should= :sender (:reason d)))))

@@ -10,18 +10,18 @@ Feature: Google Chat across several Google organizations
     Given default Grover setup in "/test/gchat-tenants"
     And config:
       | log.output                                     | memory                          |
-      | google.tonotop.project                         | marigold                        |
-      | google.tonotop.topic                           | projects/marigold/topics/isaac  |
+      | google.marigold.project                         | marigold                        |
+      | google.marigold.topic                           | projects/marigold/topics/isaac  |
       | google.acme.project                            | acme-prod                       |
       | google.acme.topic                              | projects/acme-prod/topics/isaac |
-      | comms.gchat.gchat/google                             | tonotop                         |
-      | comms.gchat.gchat/account                      | yopp@tonotop.com                |
+      | comms.gchat.gchat/google                             | marigold                         |
+      | comms.gchat.gchat/account                      | isaac@marigold.example                |
       | comms.gchat.gchat/spaces.spaces/ENG.name       | engineering                     |
       | comms.gchat-acme.type                          | gchat                           |
       | comms.gchat-acme.gchat/google                        | acme                            |
       | comms.gchat-acme.gchat/account                 | isaac@acme.example              |
       | comms.gchat-acme.gchat/spaces.spaces/ACME.name | acme-eng                        |
-    And the google auth store for organization "tonotop" has access "at-tonotop" and refresh "rt-tonotop"
+    And the google auth store for organization "marigold" has access "at-marigold" and refresh "rt-marigold"
     And the google auth store for organization "acme" has access "at-acme" and refresh "rt-acme"
     And the clock is fixed at "2026-09-18T12:00:00Z"
 
@@ -42,7 +42,7 @@ Feature: Google Chat across several Google organizations
       | content     | All clear.  |
     Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/ENG/messages" matches:
       | method                | POST              |
-      | headers.Authorization | Bearer at-tonotop |
+      | headers.Authorization | Bearer at-marigold |
       | body.text             | All clear.        |
 
   Scenario: each organization gets its own spaces/- subscription on its own topic
@@ -58,7 +58,7 @@ Feature: Google Chat across several Google organizations
     And an outbound HTTP request to "https://workspaceevents.googleapis.com/v1/subscriptions" matches:
       | #index                                | 1                              |
       | method                                | POST                           |
-      | headers.Authorization                 | Bearer at-tonotop              |
+      | headers.Authorization                 | Bearer at-marigold              |
       | body.targetResource                   | //chat.googleapis.com/spaces/- |
       | body.notificationEndpoint.pubsubTopic | projects/marigold/topics/isaac |
     And 2 outbound HTTP requests to "https://workspaceevents.googleapis.com/v1/subscriptions" were made

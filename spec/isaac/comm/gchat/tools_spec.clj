@@ -38,15 +38,15 @@
       (with-redefs [chat-api/list-messages!
                     (fn [_ _ & _] {:messages [{:text "second" :createTime "2026-09-20T02:00:00Z"
                                                :thread {:name "spaces/ENG/threads/T1"}
-                                               :sender {:name "users/118" :displayName "Micah Martin"}}
+                                               :sender {:name "users/118" :displayName "Hieronymus Finch"}}
                                               {:text "first" :createTime "2026-09-20T01:00:00Z"
                                                :thread {:name "spaces/ENG/threads/T1"}
-                                               :sender {:name "users/118" :displayName "Micah Martin"}}]})
-                    people/fetch! (fn [_] {:names [{:displayName "Micah Martin"}]
-                                           :emailAddresses [{:value "micah@tonotop.com"}]})]
+                                               :sender {:name "users/118" :displayName "Hieronymus Finch"}}]})
+                    people/fetch! (fn [_] {:names [{:displayName "Hieronymus Finch"}]
+                                           :emailAddresses [{:value "hieronymus@marigold.example"}]})]
         (let [result (:result (sut/history {:space "spaces/ENG"}))]
           (should= ["first" "second"] (mapv :text (:messages result)))
-          (should= "Micah Martin <micah@tonotop.com>" (:sender (first (:messages result))))
+          (should= "Hieronymus Finch <hieronymus@marigold.example>" (:sender (first (:messages result))))
           (should= false (:more? result)))))
 
     (it "passes a thread and a since through to Chat's filter"

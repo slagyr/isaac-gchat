@@ -221,7 +221,7 @@
   "The turn's input: what the space said since Isaac last spoke, framed as
    history, then the message that named him. Unframed history in the user
    role reads as a fresh request — the isaac-8l2u lesson (isaac-iv5c). Every
-   line — history and current alike — carries its thread marker, so Yopp can
+   line — history and current alike — carries its thread marker, so Isaac can
    group them by thread (isaac-acou)."
   [decision]
   (let [current (canon/rendered-line decision)

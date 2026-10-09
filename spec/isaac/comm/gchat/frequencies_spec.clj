@@ -16,8 +16,8 @@
              (sut/space->frequencies {:session-tags [:ops]} "gchat-spaces-ENG")))
 
   (it "carries crew, prefer and create through as written"
-    (should= {:session-tags [:ops] :crew "yopp" :prefer :oldest :create :never}
-             (sut/space->frequencies {:session-tags [:ops] :crew "yopp"
+    (should= {:session-tags [:ops] :crew "isaac" :prefer :oldest :create :never}
+             (sut/space->frequencies {:session-tags [:ops] :crew "isaac"
                                       :prefer :oldest :create :never}
                                      "gchat-spaces-ENG")))
 

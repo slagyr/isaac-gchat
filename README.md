@@ -31,8 +31,8 @@ Depends on [isaac-foundation](https://github.com/slagyr/isaac-foundation) and
 With `gchat/discover true` the account's own membership is the list. Discovery
 asks Chat which spaces and DMs the account belongs to; each one is subscribed,
 and each routes to a canonical session — the Google organization, then the
-space's display name (`gchat-tonotop-yopp-test`) or the other member in a DM
-(`gchat-tonotop-dm-micah-martin`) — carrying the space id on a `space:<id>` tag
+space's display name (`gchat-marigold-isaac-test`) or the other member in a DM
+(`gchat-marigold-dm-hieronymus-finch`) — carrying the space id on a `space:<id>` tag
 so a rename never orphans it. **Inviting the account to a space is granting it
 ingest**, and removing the account takes that back on the next listing. Entries
 under `gchat/spaces` stay overrides; without discovery an unlisted space still
