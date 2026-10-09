@@ -267,6 +267,33 @@ Feature: Google Chat inbound gate
       | display-name | Hieronymus Finch                |
       | email        | hieronymus@marigold.example           |
 
+  @wip
+  Scenario: the turn records who spoke as a verified handle (isaac-dlw5)
+    A handle is how one comm names the party on the other end. Chat names
+    a sender by users/<id>; Google has verified who that is, so the handle
+    is authenticated. The email rides along so the same party can be
+    matched across comms without another lookup.
+    Given config:
+      | comms.gchat.gchat/allow-from | ["cordelia@marigold.example"] |
+    And the Google People API knows "users/100000000000000000003" as "Cordelia Wren" with email "cordelia@marigold.example"
+    And the Chat API returns message "spaces/ENG/messages/30":
+      | sender.name         | users/100000000000000000003 |
+      | sender.displayName  | Cordelia Wren               |
+      | thread.name         | spaces/ENG/threads/T30      |
+      | text                | @Isaac who am I?            |
+      | annotations.mention | users/isaac                 |
+    And the following model responses are queued:
+      | model | type | content        |
+      | echo  | text | You, Cordelia. |
+    When Google Chat delivers a message event for "spaces/ENG/messages/30"
+    Then the latest turn on session "gchat-spaces-ENG" has from:
+      | kind          | :handle                     |
+      | comm          | :gchat                      |
+      | id            | users/100000000000000000003 |
+      | name          | Cordelia Wren               |
+      | email         | cordelia@marigold.example   |
+      | authenticated | true                        |
+
   Scenario: a mention carries what the space said while Isaac was quiet, framed as context (isaac-iv5c)
     Given the Chat API returns message "spaces/ENG/messages/30":
       | sender.email | ada@marigold.example        |
