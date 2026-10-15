@@ -116,16 +116,20 @@ Feature: Google Chat outbound
   Scenario: two threads in one DM each get their own reply, in their own thread (isaac-acou)
     The session stays per DM (isaac-ihuc), so both threads share one
     transcript; each reply still goes to the thread that addressed it, and
-    the transcript keeps each message's thread marked.
+    the transcript keeps each message's thread marked. Both messages are
+    replies inside their threads; a top-level DM message gets a top-level
+    reply (isaac-jkxd, below).
     Given the Chat API returns message "spaces/DM2/messages/1":
       | sender.email | ada@marigold.example        |
       | space.type   | DIRECT_MESSAGE         |
       | thread.name  | spaces/DM2/threads/TA  |
+      | threadReply  | true                   |
       | text         | did we ship yet?       |
     And the Chat API returns message "spaces/DM2/messages/2":
       | sender.email | ada@marigold.example          |
       | space.type   | DIRECT_MESSAGE           |
       | thread.name  | spaces/DM2/threads/TB    |
+      | threadReply  | true                     |
       | text         | are you free for lunch? |
     And the following model responses are queued:
       | model | type | content  |
@@ -730,3 +734,163 @@ Feature: Google Chat outbound
     And session "gchat-marigold-dm-hieronymus-finch" has transcript matching:
       | type    | message.role | message.content                                                                               |
       | message | assistant    | #"\[thread:T1\] \[sent here by crew herald from session cron-heartbeat\] Still on for 3pm\." |
+
+  # Where a reply posts (isaac-jkxd). In a DM the reply mirrors the person: a
+  # top-level message gets a top-level reply, a message inside a thread
+  # (Chat's threadReply) gets its reply in that thread. In any other space the
+  # reply goes in the mention's thread. The crew may override with
+  # gchat__reply_in, granted only on Chat turns: for this reply, or with
+  # remember for every later reply in the space (kept in the module's own
+  # google/chat/<space>.edn). Notices follow the same rule. Each scenario uses
+  # its own DM so per-session state never leaks between them.
+
+  @wip
+  Scenario: a top-level DM message gets a top-level reply
+    Given the Chat API returns message "spaces/DM3/messages/1":
+      | sender.email | ada@marigold.example  |
+      | space.type   | DIRECT_MESSAGE        |
+      | thread.name  | spaces/DM3/threads/TA |
+      | text         | did we ship yet?      |
+    And the following model responses are queued:
+      | model | type | content  |
+      | echo  | text | Not yet. |
+    When Google Chat delivers a message event for "spaces/DM3/messages/1"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM3/messages" matches:
+      | method                   | POST     |
+      | query.messageReplyOption |          |
+      | body.thread              |          |
+      | body.text                | Not yet. |
+
+  @wip
+  Scenario: a DM message inside a thread gets its reply in that thread
+    Given the Chat API returns message "spaces/DM4/messages/1":
+      | sender.email | ada@marigold.example  |
+      | space.type   | DIRECT_MESSAGE        |
+      | thread.name  | spaces/DM4/threads/TB |
+      | threadReply  | true                  |
+      | text         | and the docs?         |
+    And the following model responses are queued:
+      | model | type | content   |
+      | echo  | text | Docs too. |
+    When Google Chat delivers a message event for "spaces/DM4/messages/1"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM4/messages" matches:
+      | method                   | POST                                 |
+      | query.messageReplyOption | REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD |
+      | body.thread.name         | spaces/DM4/threads/TB                |
+      | body.text                | Docs too.                            |
+
+  @wip
+  Scenario: the crew can post one reply top-level, and the next reply mirrors again
+    No crew grant: gchat__reply_in comes with the Chat turn.
+    Given the Chat API returns message "spaces/DM5/messages/1":
+      | sender.email | ada@marigold.example  |
+      | space.type   | DIRECT_MESSAGE        |
+      | thread.name  | spaces/DM5/threads/TC |
+      | threadReply  | true                  |
+      | text         | new topic: lunch?     |
+    And the Chat API returns message "spaces/DM5/messages/2":
+      | sender.email | ada@marigold.example  |
+      | space.type   | DIRECT_MESSAGE        |
+      | thread.name  | spaces/DM5/threads/TC |
+      | threadReply  | true                  |
+      | text         | and dessert?          |
+    And the following model responses are queued:
+      | model | type | content  | tool_call       | arguments             |
+      | echo  |      |          | gchat__reply_in | {"where":"top-level"} |
+      | echo  | text | Tacos.   |                 |                       |
+      | echo  | text | Churros. |                 |                       |
+    When Google Chat delivers a message event for "spaces/DM5/messages/1"
+    And Google Chat delivers a message event for "spaces/DM5/messages/2"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM5/messages" matches:
+      | #index      | 0      |
+      | body.thread |        |
+      | body.text   | Tacos. |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM5/messages" matches:
+      | #index           | 1                     |
+      | body.thread.name | spaces/DM5/threads/TC |
+      | body.text        | Churros.              |
+
+  @wip
+  Scenario: a remembered choice holds for later replies in that DM
+    Both messages are top-level, so the second reply lands in a thread only
+    because the first turn remembered the choice.
+    Given the Chat API returns message "spaces/DM6/messages/1":
+      | sender.email | ada@marigold.example       |
+      | space.type   | DIRECT_MESSAGE             |
+      | thread.name  | spaces/DM6/threads/TA      |
+      | text         | always use threads with me |
+    And the Chat API returns message "spaces/DM6/messages/2":
+      | sender.email | ada@marigold.example  |
+      | space.type   | DIRECT_MESSAGE        |
+      | thread.name  | spaces/DM6/threads/TB |
+      | text         | did we ship yet?      |
+    And the following model responses are queued:
+      | model | type | content  | tool_call       | arguments                          |
+      | echo  |      |          | gchat__reply_in | {"where":"thread","remember":true} |
+      | echo  | text | Will do. |                 |                                    |
+      | echo  | text | Not yet. |                 |                                    |
+    When Google Chat delivers a message event for "spaces/DM6/messages/1"
+    And Google Chat delivers a message event for "spaces/DM6/messages/2"
+    Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM6/messages" matches:
+      | #index           | 0                     |
+      | body.thread.name | spaces/DM6/threads/TA |
+      | body.text        | Will do.              |
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM6/messages" matches:
+      | #index           | 1                     |
+      | body.thread.name | spaces/DM6/threads/TB |
+      | body.text        | Not yet.              |
+    And the isaac file "google/chat/spaces-DM6.edn" EDN contains:
+      | path    | value   |
+      | replies | :thread |
+
+  @wip
+  Scenario: a turn that errors on a top-level DM message posts its notice top-level
+    Given the Chat API returns message "spaces/DM7/messages/1":
+      | sender.email | ada@marigold.example  |
+      | space.type   | DIRECT_MESSAGE        |
+      | thread.name  | spaces/DM7/threads/TA |
+      | text         | status?               |
+    And the following model responses are queued:
+      | model | type  | content                         |
+      | echo  | error | wire format mismatch: token xy9 |
+    When Google Chat delivers a message event for "spaces/DM7/messages/1"
+    Then 1 outbound HTTP requests to "https://chat.googleapis.com/v1/spaces/DM7/messages" were made
+    And an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DM7/messages" matches:
+      | body.thread |                            |
+      | body.text   | #"(?is).*provider error.*" |
+
+  @wip
+  Scenario: the guidance says where the message came in, where the reply goes, and how to change it
+    Given the Chat API returns message "spaces/DM8/messages/1":
+      | sender.email | ada@marigold.example  |
+      | space.type   | DIRECT_MESSAGE        |
+      | thread.name  | spaces/DM8/threads/TA |
+      | text         | hello                 |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Hi.     |
+    When Google Chat delivers a message event for "spaces/DM8/messages/1"
+    Then the last LLM request matches:
+      | key      | value                                        |
+      | messages | #"(?s)came in at the top level"              |
+      | messages | #"(?s)your reply will post at the top level" |
+      | messages | #"(?s)gchat__reply_in"                       |
+
+  @wip
+  Scenario: a Chat turn's system prompt names the space and whether it is a direct message
+    The space never changes within a session, so it rides the system prompt
+    (the gchat module's system section) without disturbing the prompt cache.
+    Given the Chat API returns message "spaces/DM9/messages/1":
+      | sender.email | ada@marigold.example  |
+      | space.type   | DIRECT_MESSAGE        |
+      | thread.name  | spaces/DM9/threads/TA |
+      | text         | hello                 |
+    And the following model responses are queued:
+      | model | type | content |
+      | echo  | text | Hi.     |
+    When Google Chat delivers a message event for "spaces/DM9/messages/1"
+    Then the last LLM request matches:
+      | key                 | value                                   |
+      | messages[0].role    | system                                  |
+      | messages[0].content | #"(?s).*Google Chat space spaces/DM9.*" |
+      | messages[0].content | #"(?s).*direct message.*"               |
