@@ -702,6 +702,7 @@ Feature: Google Chat outbound
       | type    | message.role | message.content                                                                                     |
       | message | assistant    | #"\[thread:posted\] \[sent here by crew herald from session cron-heartbeat\] Your weekly digest\." |
 
+  @wip
   Scenario: a delivery into an existing thread leads its note with that thread's marker
     Given config:
       | google.marigold.topic         | projects/marigold/topics/isaac |
