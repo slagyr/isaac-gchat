@@ -729,6 +729,7 @@ Feature: Google Chat outbound
       | attempts     | 0                     |
     When the delivery worker ticks
     Then an outbound HTTP request to "https://chat.googleapis.com/v1/spaces/DMM/messages" matches:
+      | #index           | 1                     |
       | method           | POST                  |
       | body.thread.name | spaces/DMM/threads/T1 |
     And session "gchat-marigold-dm-hieronymus-finch" has transcript matching:
