@@ -10,6 +10,7 @@
     [isaac.comm.gchat.canon :as canon]
     [isaac.comm.gchat.format :as fmt]
     [isaac.comm.gchat.self :as self]
+    [isaac.comm.gchat.reply-placement :as placement]
     [isaac.comm.gchat.target :as target]
     [isaac.comm.gchat.tenant :as tenant]
     [isaac.comm.gchat.transcript :as transcript]
@@ -277,12 +278,12 @@
   "Post the turn's reply. Returns nil on success, or the failure fields when
    create-message! throws - caught here so it never surfaces as a raw turn
    error (isaac-qry7)."
-  [comm origin text]
+  [comm session-key origin text]
   (let [cfg   (slice comm)
         token (access-token cfg)
         cap   (or (:gchat/message-cap cfg) fmt/default-message-cap)]
     (try
-      (post-chunks! (:space origin) (:thread origin) text cap token (tenant/of-comm cfg))
+      (post-chunks! (:space origin) (placement/thread session-key origin) text cap token (tenant/of-comm cfg))
       nil
       (catch Exception e
         (let [{:keys [space thread status reason] :as failure} (delivery-failure-fields origin e)]
@@ -306,7 +307,7 @@
       (if (:invited? origin)
         (do (divert-reply! origin text)
             (reaction-done! comm session-key origin))
-        (if-let [failure (reply! comm origin text)]
+        (if-let [failure (reply! comm session-key origin text)]
           (swap! delivery-failures* assoc session-key (assoc failure :class :delivery-failure))
           (do (note-own-reply! comm origin text)
               (reaction-done! comm session-key origin)))))))
@@ -383,7 +384,7 @@
         (let [cfg   (slice comm)
               token (access-token cfg)
               cap   (or (:gchat/message-cap cfg) fmt/default-message-cap)]
-          (post-chunks! space thread text cap token (tenant/of-comm cfg)))
+          (post-chunks! space (placement/thread session-key (get @origin-by-session session-key)) text cap token (tenant/of-comm cfg)))
         (catch Exception e
           (log/error :gchat.notice/failed :session session-key :error (.getMessage e)))))))
 
@@ -410,7 +411,8 @@
 
       :else
       (swap! parked-sessions disj session-key)))
-  (swap! origin-by-session dissoc session-key))
+  (swap! origin-by-session dissoc session-key)
+  (placement/finish! session-key))
 
 (deftype GchatComm [host cfg])
 

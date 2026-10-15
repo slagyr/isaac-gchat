@@ -270,6 +270,7 @@
                               (crew-name (:default-crew opts)))
              :space-cfg   entry
              :dm?         direct?
+             :thread-reply? (= "true" (str (:threadReply message)))
              :text        (or (:text message) "")
              :sender      (people/render identity)
              ;; Who spoke, structured: the rendered name is for the turn to

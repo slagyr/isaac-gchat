@@ -83,7 +83,7 @@
           (sut/handle-event {:data {:message {:name "spaces/ENG/messages/1"}}})
           (should= "[thread:T1] ada@marigold.example: @Isaac can you look at the deploy?"
                    (:input @dispatched))
-          (should= guidance/TEXT (:guidance @dispatched))))))
+          (should= (guidance/text :thread false) (:guidance @dispatched))))))
 
   (it "does not dispatch when the gate drops"
     (let [dispatched (atom false)]

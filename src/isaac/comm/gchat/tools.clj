@@ -10,7 +10,8 @@
     [clojure.string :as str]
     [isaac.comm.gchat :as gchat]
     [isaac.comm.gchat.chat-api :as chat-api]
-    [isaac.comm.gchat.people-render :as render]))
+    [isaac.comm.gchat.people-render :as render]
+    [isaac.comm.gchat.reply-placement :as placement]))
 
 (defn- error [message] {:isError true :error message})
 
@@ -81,3 +82,18 @@
                               "limit"  {:type "integer" :description "Messages to return (default 50)"}}
                  :required   ["space"]}
    :handler     #'history})
+
+(defn reply-in [arguments]
+  (let [args (args-of arguments)]
+    (placement/choose! (or (get args "session_key") (get arguments :session_key))
+                       (some-> (get args "where") keyword)
+                       (true? (get args "remember")))))
+
+(defn reply-in-tool-factory [_]
+  {:description "Choose where this Google Chat turn's reply posts. Set remember for later replies in this space."
+   :parameters {:type "object"
+                :properties {"where" {:type "string" :enum ["thread" "top-level"]}
+                             "remember" {:type "boolean"}}
+                :required ["where"]}
+   :builtin? true
+   :handler #'reply-in})

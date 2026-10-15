@@ -66,9 +66,13 @@
  ;; Chat tools on Isaac's own token and the crew's allow-list — a crew that
  ;; needs to read further back, or to speak somewhere it was not addressed,
  ;; asks Chat directly instead of shelling out (isaac-jqk2).
+ :isaac.agent/system-sections
+ {:gchat {:factory isaac.comm.gchat.reply-placement/system-section :order 450}}
+
  :isaac.agent/tools
  {:gchat__spaces  {:factory isaac.comm.gchat.tools/spaces-tool-factory}
-  :gchat__history {:factory isaac.comm.gchat.tools/history-tool-factory}}
+  :gchat__history {:factory isaac.comm.gchat.tools/history-tool-factory}
+  :gchat__reply_in {:factory isaac.comm.gchat.tools/reply-in-tool-factory}}
 
  :isaac.google/handler
  {"google.workspace.chat.message.v1.created"    isaac.comm.gchat.handler/handle-event

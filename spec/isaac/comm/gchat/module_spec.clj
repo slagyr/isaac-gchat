@@ -37,5 +37,9 @@
              (:isaac.google/scopes manifest)))
 
   (it "contributes the read tools only - comm__send is the one send tool (isaac-baf1)"
-    (should= #{:gchat__history :gchat__spaces} (set (keys (:isaac.agent/tools manifest)))))
+    (should= #{:gchat__history :gchat__spaces :gchat__reply_in} (set (keys (:isaac.agent/tools manifest)))))
+
+  (it "contributes reply placement only through a Chat turn system section"
+    (should= 'isaac.comm.gchat.reply-placement/system-section
+             (get-in manifest [:isaac.agent/system-sections :gchat :factory])))
   )

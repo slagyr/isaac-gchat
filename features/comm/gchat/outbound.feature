@@ -702,7 +702,6 @@ Feature: Google Chat outbound
       | type    | message.role | message.content                                                                                     |
       | message | assistant    | #"\[thread:posted\] \[sent here by crew herald from session cron-heartbeat\] Your weekly digest\." |
 
-  @wip
   Scenario: a delivery into an existing thread leads its note with that thread's marker
     Given config:
       | google.marigold.topic         | projects/marigold/topics/isaac |
@@ -746,7 +745,6 @@ Feature: Google Chat outbound
   # google/chat/<space>.edn). Notices follow the same rule. Each scenario uses
   # its own DM so per-session state never leaks between them.
 
-  @wip
   Scenario: a top-level DM message gets a top-level reply
     Given the Chat API returns message "spaces/DM3/messages/1":
       | sender.email | ada@marigold.example  |
@@ -763,7 +761,6 @@ Feature: Google Chat outbound
       | body.thread              |          |
       | body.text                | Not yet. |
 
-  @wip
   Scenario: a DM message inside a thread gets its reply in that thread
     Given the Chat API returns message "spaces/DM4/messages/1":
       | sender.email | ada@marigold.example  |
@@ -781,7 +778,6 @@ Feature: Google Chat outbound
       | body.thread.name         | spaces/DM4/threads/TB                |
       | body.text                | Docs too.                            |
 
-  @wip
   Scenario: the crew can post one reply top-level, and the next reply mirrors again
     No crew grant: gchat__reply_in comes with the Chat turn.
     Given the Chat API returns message "spaces/DM5/messages/1":
@@ -812,7 +808,6 @@ Feature: Google Chat outbound
       | body.thread.name | spaces/DM5/threads/TC |
       | body.text        | Churros.              |
 
-  @wip
   Scenario: a remembered choice holds for later replies in that DM
     Both messages are top-level, so the second reply lands in a thread only
     because the first turn remembered the choice.
@@ -845,7 +840,6 @@ Feature: Google Chat outbound
       | path    | value   |
       | replies | :thread |
 
-  @wip
   Scenario: a turn that errors on a top-level DM message posts its notice top-level
     Given the Chat API returns message "spaces/DM7/messages/1":
       | sender.email | ada@marigold.example  |
@@ -861,7 +855,6 @@ Feature: Google Chat outbound
       | body.thread |                            |
       | body.text   | #"(?is).*provider error.*" |
 
-  @wip
   Scenario: the guidance says where the message came in, where the reply goes, and how to change it
     Given the Chat API returns message "spaces/DM8/messages/1":
       | sender.email | ada@marigold.example  |
@@ -878,7 +871,6 @@ Feature: Google Chat outbound
       | messages | #"(?s)your reply will post at the top level" |
       | messages | #"(?s)gchat__reply_in"                       |
 
-  @wip
   Scenario: a Chat turn's system prompt names the space and whether it is a direct message
     The space never changes within a session, so it rides the system prompt
     (the gchat module's system section) without disturbing the prompt cache.

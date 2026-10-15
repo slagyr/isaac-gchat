@@ -10,6 +10,7 @@
     [isaac.comm.gchat.guidance :as guidance]
     [isaac.comm.gchat.inbound-attachment :as inbound-attachment]
     [isaac.comm.gchat.lookup :as lookup]
+    [isaac.comm.gchat.reply-placement :as placement]
     [isaac.comm.gchat.self :as self]
     [isaac.comm.gchat.transcript :as transcript]
     [isaac.agent.comm.registry :as comm-registry]
@@ -58,7 +59,9 @@
   (let [{:keys [user display-name email]} (:identity decision)]
     (cond-> {:kind   :gchat
              :space  (:space decision)
-             :thread (:thread decision)}
+             :thread (:thread decision)
+             :dm? (:dm? decision)
+             :thread-reply? (:thread-reply? decision)}
       (seq (str (or user "")))                       (assoc :user user)
       (seq (str (or display-name "")))               (assoc :display-name display-name)
       (seq (str (or email "")))                      (assoc :email email)
@@ -254,7 +257,8 @@
                           :coalesce-key (:thread decision)
                           :crew        (:crew decision)
                           :config      (full-config)
-                          :guidance    guidance/TEXT}
+                          :guidance    (guidance/text (placement/where session-key (origin decision))
+                                                      (:thread-reply? decision))}
                    ch (assoc :comm ch))))
 
 (defn- dispatch! [decision]
@@ -263,6 +267,7 @@
         input    (framed-input decision)
         keys*    (session-keys decision)]
     (transcript/append! (:space decision) (transcript/entry decision))
+    (doseq [session-key keys*] (placement/begin! session-key (origin decision)))
     (doseq [session-key keys*]
       (let [session (ensure-session! decision session-key)]
         (when-let [store (session-store/registered-store)]

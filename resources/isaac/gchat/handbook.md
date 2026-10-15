@@ -3,7 +3,7 @@
 You are a crew running inside Isaac. This chapter covers what
 **isaac-gchat** owns: a `gchat`-type entry in the `comms` table, the
 inbound gate that decides which Chat messages start a turn, outbound
-replies and sends, and two read-only Chat tools. It is built on top of
+replies and sends, and two read-only Chat tools plus a turn-scoped reply-placement tool. It is built on top of
 **isaac.google** (OAuth, the Pub/Sub push door, registration renewal) —
 read that module's chapter for how a Google organization's credentials,
 project, and topic are set up; this chapter only covers the Chat-specific
@@ -228,8 +228,9 @@ check the registration log before assuming a gate or routing problem.
 
 ## Outbound: replies and sends
 
-**What it is.** A turn's reply posts back into the thread and space it
-came from, as the Google account. A message initiated by the agent (not a
+**What it is.** A turn's reply posts as the Google account. In a direct message, a top-level message receives a top-level reply and a thread reply (`threadReply: true`) receives a reply in that thread. In other spaces, the reply goes in the mention's thread. Top-level replies omit both `thread` and `messageReplyOption`. The Chat-only `gchat__reply_in` tool takes `where` (`thread` or `top-level`) and optional `remember` (boolean): without `remember`, it changes just this turn's reply; with `remember: true`, it also saves this space's default for later turns. This turn's choice wins over the saved choice, which wins over the mirror rule. The remembered record belongs to this module beside the transcript at `<root>/google/chat/<space>.edn` (for example `google/chat/spaces-DM6.edn`), with shape `{:replies :thread}` or `{:replies :top-level}`. It is not session state or Isaac config. Error, weather-wall and park notices use the same placement as the reply. The system prompt identifies the Chat space and whether it is a DM; the per-turn guidance names incoming and outgoing placement.
+
+A message initiated by the agent (not a reply) A message initiated by the agent (not a
 reply) goes through the shared `comm__send` tool (`isaac.agent`'s), which
 this comm accepts fields for:
 
@@ -391,8 +392,8 @@ allow/deny list (`isaac.agent`), let a crew look beyond what a mention
 already carries in its framed context: `gchat__spaces` lists every space
 and DM the account belongs to; `gchat__history` reads what was said in
 one space (optionally one thread, or only messages after a given time).
-Both run on Isaac's own Chat token, the same one the comm sends with —
-never a crew's separate credential. There is no send tool here:
+Both read tools run on Isaac's own Chat token, the same one the comm sends with —
+never a crew's separate credential. `gchat__reply_in` is a third tool, automatically granted only during a Google Chat turn via the system section, with no crew grant needed. It controls the final reply, not additional sends. There is no send tool here:
 `comm__send` (isaac.agent's) is the one way a crew sends a Chat message
 of its own.
 

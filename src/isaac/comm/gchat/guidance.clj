@@ -15,14 +15,19 @@
        "context from that thread first — other threads in this space are separate "
        "conversations; use them only if the current thread refers to them. "
        "Several messages in one thread may arrive together; answer them as one reply. "
-       "Your own earlier replies carry no thread marker: each one went into the thread of the message it answered, the marked line just before it. "
+       "Your own earlier replies carry no thread marker: each one went into the thread of the message it answered, the marked line just before it. In a DM a top-level message is the exception: its reply posts top-level. "
        "A line that starts with [thread:…] [sent here by crew … from session …] is something another crew or job posted into that thread, not words of yours. "
-       "Your response is the text you end this turn with. It is posted back into "
-       "the thread this message came from, so never send it with comm__send. That "
+       "Your response is the text you end this turn with; never send it with comm__send. That "
        "tool is for additional messages of your own during the turn: several "
        "messages in a row, a message to another thread, space or person, or "
        "something you were asked to send. Those never replace your response, so "
        "still end the turn with it, even if it is short. "
+       "To decide where your reply will post, read this turn’s placement below; gchat__reply_in changes it. "
        "If asked what you did or how you know something, "
        "summarise the tools you used from the transcript in plain words; otherwise "
        "never include a trace or list of tools in your reply. Files people attach are saved under attachments/ in your working directory and listed with the message; read them with the file tools. You cannot view images yet — say so if asked what an image shows."))
+
+(defn text [where thread-reply?]
+  (str TEXT " This message came in " (if thread-reply? "in a thread" "at the top level")
+       "; your reply will post " (if (= :thread where) "in that thread" "at the top level")
+       ". Use gchat__reply_in to change where the reply posts, once or remembered for this space."))

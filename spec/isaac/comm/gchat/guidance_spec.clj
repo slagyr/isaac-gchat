@@ -15,14 +15,10 @@
     (should (re-find #"(?i)tools you used" sut/TEXT))
     (should (re-find #"(?i)never include a trace" sut/TEXT)))
 
-  (it "draws the response/send line with comm__send, verbatim (isaac-baf1)"
-    (should-contain (str "Your response is the text you end this turn with. It is posted back into "
-                         "the thread this message came from, so never send it with comm__send. That "
-                         "tool is for additional messages of your own during the turn: several "
-                         "messages in a row, a message to another thread, space or person, or "
-                         "something you were asked to send. Those never replace your response, so "
-                         "still end the turn with it, even if it is short.")
-                    sut/TEXT))
+  (it "explains reply placement without sending the response with comm__send"
+    (should-contain "your reply will post" sut/TEXT)
+    (should-contain "gchat__reply_in" sut/TEXT)
+    (should-contain "never send it with comm__send" sut/TEXT))
 
   (it "no longer names the retired gchat__send (isaac-baf1)"
     (should-not (re-find #"gchat__send" sut/TEXT)))
